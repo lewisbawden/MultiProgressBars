@@ -106,28 +106,23 @@ class Multibar(qt.QObject):
     setNameSignal = qt.pyqtSignal(object, object)
     setTotalSignal = qt.pyqtSignal(object, object)
 
-    def __init__(self, func, it, it_args=None, batch_size=None):
+    def __init__(self, batch_size=None):
         super(Multibar, self).__init__()
-        self.func = func
-        self.it = copy(it)
-        self.it_args = it_args
+
+        self.app = qt.QApplication([])
 
         self.batch_size = os.cpu_count() - 1 if batch_size is None else batch_size
-        task_generator = (Worker(self.func, *self.it_args[pid], pid=pid, mbar=self)
-                          for pid, itx in enumerate(self.it))
-        self.task_queue = iter(task_generator)
 
+        self.pbars = dict()
+        self.tasks = dict()
         self.running_tasks = dict()
-        self.results = {}
+        self.results = dict()
 
         self.mutex = qt.QMutex()
 
         self.setup_window()
-        self.setup_pbars()
 
         self.scroll_area.show()
-
-        self.initialise_processing()
 
     def setup_window(self):
         self.layout = qt.QGridLayout()
@@ -137,7 +132,7 @@ class Multibar(qt.QObject):
 
         # window is a QScrollArea widget
         self.scroll_area = qt.QScrollArea()
-        self.scroll_area.setWindowTitle("{}: progress updates".format(self.func.__name__))
+        self.scroll_area.setWindowTitle("Processing")
         self.scroll_area.setWidget(self.widget)
         self.scroll_area.setWidgetResizable(True)
 
@@ -151,27 +146,46 @@ class Multibar(qt.QObject):
 
         self.scroll_area.setFocus()
 
-    def setup_pbars(self):
-        self.pbars = {}
-        for i, args in enumerate(self.it_args):
-            name, total, _ = args
-            self.pbars[i] = LabeledProgressBar(total=total, name=name, units_symbol="B", parent=self.scroll_area)
-            self.layout.addWidget(self.pbars[i].prefix_label, i, 0)
-            self.layout.addWidget(self.pbars[i], i, 1)
-            self.layout.addWidget(self.pbars[i].progress_label, i, 2, alignment=qt.Qt.AlignRight)
+    def add_task(self, pbar_descr, iters_total, apply_func, *func_args, **func_kwargs):
+        """
+        Add a task to be processed with the progress monitored.
+        :param pbar_descr: Progress bar label
+        :param iters_total: Total iterations expected within the task
+        :param apply_func: Function to call (must accept 'pid: int, mbar: Multibar' as kwargs)
+        :param func_args: *args of the function to be called
+        :param func_kwargs: *kwargs of the function to be called
+        """
+        i = len(self.pbars.keys())
+        self.add_task_pbar(i, pbar_descr, iters_total)
+        self.add_task_worker(i, apply_func, *func_args, **func_kwargs)
 
-        # update must be done through sending a signal so the task itself is not updating the main display
+    def add_task_pbar(self, i, pbar_descr, iters_total):
+        self.pbars[i] = LabeledProgressBar(total=iters_total, name=pbar_descr, parent=self.scroll_area)
+        self.layout.addWidget(self.pbars[i].prefix_label, i, 0)
+        self.layout.addWidget(self.pbars[i], i, 1)
+        self.layout.addWidget(self.pbars[i].progress_label, i, 2, alignment=qt.Qt.AlignRight)
+
+    def add_task_worker(self, i, apply_func, *func_args, **func_kwargs):
+        self.tasks[i] = Worker(apply_func, *func_args, **func_kwargs, pid=i, mbar=self)
+
+    def begin_processing(self):
         self.setValueSignal.connect(self._set_pbar_value)
+        self.setNameSignal.connect(self._set_pbar_name)
+        self.setTotalSignal.connect(self._set_pbar_total)
 
-    def initialise_processing(self):
+        self.allProcessesFinished.connect(self.app.quit)
+
+        self.task_queue = iter(self.tasks.values())
         for i in range(self.batch_size):
             self.start_next()
+
+        self.app.exec()
 
     def start_next(self):
         try:
             next_task = next(self.task_queue)
             next_task.finished.connect(self.check_all_finished)
-            next_task.send_result.connect(self.get_result)
+            next_task.send_result.connect(self._get_result)
             next_task.start()
             self.running_tasks[next_task.pid] = next_task
         except StopIteration:
@@ -221,25 +235,8 @@ class Multibar(qt.QObject):
     def _set_pbar_total(self, pbar_id, total):
         self.pbars[pbar_id].set_total(total)
 
-    def get_result(self, pid, result):
+    def _get_result(self, pid, result):
         self.results[pid] = result
-
-
-def multibar(it, it_args, func):
-    app = qt.QApplication([])
-    mbar = Multibar(it, it_args, func)
-    mbar.all_processes_finished.connect(app.quit)
-    yield mbar
-    app.exec()
-    return mbar
-
-
-@wrapped_timer
-def multibar_test(it, it_args, func):
-    app = qt.QApplication([])
-    mbar = Multibar(func, it, it_args)
-    mbar.allProcessesFinished.connect(app.quit)
-    app.exec()
 
 
 def sleep_test_callback(idx, count, sleep_time, pid, mbar: Multibar):
@@ -249,9 +246,11 @@ def sleep_test_callback(idx, count, sleep_time, pid, mbar: Multibar):
     return idx, count
 
 
-def slow_loop_test(idx, count, sleep_time, pid, mbar: Multibar):
+def slow_loop_test(idx, count, sleep_time, pid: int, mbar: Multibar):
+    mbar.update_total(pid, count)
+    mbar.update_name(pid, f"proc: {idx}")
     for i in range(count):
-        for j in range(10000):
+        for j in range(int(10000 * sleep_time * 1000)):
             k = j + i
         mbar.update_value(pid, i)
     return idx, count
@@ -262,25 +261,22 @@ def get_random_string(min_length, max_length):
     return "".join([chr(random.randint(97, 122)) for i in range(length)])
 
 
+@wrapped_timer
 def run_test():
     it = iter([get_random_string(8, 64) for i in range(num_tasks)])  # iter(range(num_tasks))
     it_args = [[i, get_rand_count(), get_rand_sleep()] for i in copy(it)]
 
-    multibar_test(copy(it), it_args, slow_loop_test)
+    mbar = Multibar()
+    for name, args in zip(it, it_args):
+        rand_str, rand_count, rand_sleep = args
+        mbar.add_task('', 1, slow_loop_test, *args)
+    mbar.begin_processing()
 
 
 if __name__ == "__main__":
-    #TODO: allow Multibar object setup without giving args or funcs - test using 'with' context to initialise
-    # add create_task feature, takes func, task_name, args, create pid in this func, have a lookup of pid->name
-    # setup main object without displaying anything, add tasks iteratively through loop outside main func only
-    # add a terminate all tasks when deleting
-    # test funcs for updating total and name in the target func
-    # add iterations/s label, time elapsed label, time remaining estimate label
-    # create decorator for try except and locker
-
     random.seed(123)
     num_tasks = 20
-    get_rand_count = lambda: random.randint(100, 2000)
+    get_rand_count = lambda: random.randint(100, 500)
     get_rand_sleep = lambda: random.randint(1, 5) * 0.001
 
     run_test()
