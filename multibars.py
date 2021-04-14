@@ -117,7 +117,7 @@ class Multibar(qt.QObject):
                     return None
             return wrapper
 
-    def __init__(self, batch_size=None):
+    def __init__(self, title='', batch_size=None):
         super(Multibar, self).__init__()
 
         self.app = qt.QApplication([])
@@ -131,9 +131,7 @@ class Multibar(qt.QObject):
 
         self.mutex = qt.QMutex()
 
-        self.setup_window()
-
-        self.scroll_area.show()
+        self.setup_window(title)
 
     def __del__(self):
         if len(self.running_tasks) > 0:
@@ -142,7 +140,7 @@ class Multibar(qt.QObject):
                 self.end_task(pid)
             self.allProcessesFinished.emit()
 
-    def setup_window(self):
+    def setup_window(self, title):
         self.layout = qt.QGridLayout()
         self.widget = qt.QWidget()
         self.widget.setEnabled(False)
@@ -150,7 +148,7 @@ class Multibar(qt.QObject):
 
         # window is a QScrollArea widget
         self.scroll_area = qt.QScrollArea()
-        self.scroll_area.setWindowTitle("Processing")
+        self.scroll_area.setWindowTitle(title)
         self.scroll_area.setWidget(self.widget)
         self.scroll_area.setWidgetResizable(True)
 
@@ -163,18 +161,22 @@ class Multibar(qt.QObject):
         self.scroll_area.move(panel_posx, panel_posy)
 
         self.scroll_area.setFocus()
+        self.scroll_area.show()
 
-    def add_task(self, func=callable, func_args=tuple, func_kwargs=dict(), pbar_descr='', iters_total=1):
+    def adjust_font(self, size):
+        self.scroll_area.setFont(qt.QFont('calibri', size))
+
+    def add_task(self, func=callable, func_args=tuple, func_kwargs=dict(), descr='', total=1):
         """
         Add a task to be processed with the progress monitored.
-        :param pbar_descr: Progress bar label
-        :param iters_total: Total iterations expected within the task
         :param func: Function to call (must accept 'pid: int, mbar: Multibar' as kwargs)
         :param func_args: *args of the function to be called
         :param func_kwargs: *kwargs of the function to be called
+        :param descr: Progress bar label
+        :param total: Total iterations expected within the task
         """
         i = len(self.pbars.keys())
-        self.add_task_pbar(i, pbar_descr, iters_total)
+        self.add_task_pbar(i, descr, total)
         self.add_task_worker(i, func, *func_args, **func_kwargs)
 
     def add_task_pbar(self, i, pbar_descr, iters_total):
@@ -193,6 +195,8 @@ class Multibar(qt.QObject):
         self.setTotalSignal.connect(self._set_pbar_total)
 
         self.allProcessesFinished.connect(self.app.quit)
+
+        self.app.processEvents()
 
         self.task_queue = iter(self.tasks.values())
         for i in range(self.batch_size):
@@ -283,7 +287,7 @@ class BarUpdater:
 
 def slow_loop_test(idx, count, sleep_time, pbar: BarUpdater = None):
     for i in pbar(range(count), descr=f'{idx}', total=count):
-        for j in range(int(3000 * sleep_time * 1000)):
+        for j in range(int(10000 * sleep_time * 1000)):
             k = j + i
     return idx, count
 
@@ -295,14 +299,15 @@ def get_random_string(min_length, max_length):
 
 @wrapped_timer
 def run_test():
-    it = iter([get_random_string(8, 64) for i in range(num_tasks)])  # iter(range(num_tasks))
+    it = iter([get_random_string(8, 64) for i in range(num_tasks)])
     it_args = [[i, get_rand_count(), get_rand_sleep()] for i in copy(it)]
 
     mbar = Multibar()
     for name, args in zip(it, it_args):
         rand_str, rand_count, rand_sleep = args
-        mbar.add_task(slow_loop_test, (rand_str, rand_count,), {'sleep_time': rand_sleep})
-    mbar.begin_processing()
+        mbar.add_task(slow_loop_test, (rand_str, rand_count,), {'sleep_time': rand_sleep}, descr=rand_str, total=rand_count)
+    mbar.app.exec()
+    # mbar.begin_processing()
 
 
 if __name__ == "__main__":
