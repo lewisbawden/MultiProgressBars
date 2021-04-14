@@ -24,7 +24,7 @@ class Worker(qt.QThread):
         self.func = func
         self.args = args
         self.kwargs = kwargs
-        self.pid = kwargs.get('pid', None)
+        self.pid = kwargs.pop('pid', None)
 
     def run(self):
         out = self.func(*self.args, **self.kwargs)
@@ -62,6 +62,17 @@ class LabeledProgressBar(qt.QProgressBar):
         factor, unit_prefix = self.get_units_prefix(value)
         return "{:.2f} {}{}".format(value / (10 ** factor), unit_prefix, self.units_symbol)
 
+    def get_units_prefix(self, num):
+        # uses base10 location of digits to get units prefix, i.e. not equivlant to byte conversion if units are bytes
+        digits = len(str(num)) - 2
+        factor = 3 * round(digits / 3)
+        if factor not in self.unit_conv.keys():
+            if factor > 2:
+                factor = max(self.unit_conv.keys())
+            else:
+                return 1, ''
+        return factor, self.unit_conv[factor]
+
     @staticmethod
     def get_time():
         return time.time()
@@ -88,17 +99,6 @@ class LabeledProgressBar(qt.QProgressBar):
         self.progress_str = " / ".join([self.get_formatted_number(self.progress), self.total_str])
         self.progress_label.setText(self.progress_str)
 
-    def get_units_prefix(self, num):
-        # uses base10 location of digits to get units prefix, i.e. not equivlant to byte conversion if units are bytes
-        digits = len(str(num)) - 2
-        factor = 3 * round(digits / 3)
-        if factor not in self.unit_conv.keys():
-            if factor > 2:
-                factor = max(self.unit_conv.keys())
-            else:
-                return 1, ''
-        return factor, self.unit_conv[factor]
-
 
 class Multibar(qt.QObject):
     allProcessesFinished = qt.pyqtSignal()
@@ -124,6 +124,13 @@ class Multibar(qt.QObject):
 
         self.scroll_area.show()
 
+    def __del__(self):
+        if len(self.running_tasks) > 0:
+            running_pids = list(self.running_tasks.keys())
+            for pid in running_pids:
+                self.end_task(pid)
+            self.allProcessesFinished.emit()
+
     def setup_window(self):
         self.layout = qt.QGridLayout()
         self.widget = qt.QWidget()
@@ -146,18 +153,18 @@ class Multibar(qt.QObject):
 
         self.scroll_area.setFocus()
 
-    def add_task(self, pbar_descr, iters_total, apply_func, *func_args, **func_kwargs):
+    def add_task(self, func=callable, func_args=tuple, func_kwargs=dict(), pbar_descr='', iters_total=1):
         """
         Add a task to be processed with the progress monitored.
         :param pbar_descr: Progress bar label
         :param iters_total: Total iterations expected within the task
-        :param apply_func: Function to call (must accept 'pid: int, mbar: Multibar' as kwargs)
+        :param func: Function to call (must accept 'pid: int, mbar: Multibar' as kwargs)
         :param func_args: *args of the function to be called
         :param func_kwargs: *kwargs of the function to be called
         """
         i = len(self.pbars.keys())
         self.add_task_pbar(i, pbar_descr, iters_total)
-        self.add_task_worker(i, apply_func, *func_args, **func_kwargs)
+        self.add_task_worker(i, func, *func_args, **func_kwargs)
 
     def add_task_pbar(self, i, pbar_descr, iters_total):
         self.pbars[i] = LabeledProgressBar(total=iters_total, name=pbar_descr, parent=self.scroll_area)
@@ -166,7 +173,8 @@ class Multibar(qt.QObject):
         self.layout.addWidget(self.pbars[i].progress_label, i, 2, alignment=qt.Qt.AlignRight)
 
     def add_task_worker(self, i, apply_func, *func_args, **func_kwargs):
-        self.tasks[i] = Worker(apply_func, *func_args, **func_kwargs, pid=i, mbar=self)
+        updater = BarUpdater(i, self)
+        self.tasks[i] = Worker(apply_func, *func_args, **func_kwargs, pid=i, pbar=updater)
 
     def begin_processing(self):
         self.setValueSignal.connect(self._set_pbar_value)
@@ -239,20 +247,42 @@ class Multibar(qt.QObject):
         self.results[pid] = result
 
 
-def sleep_test_callback(idx, count, sleep_time, pid, mbar: Multibar):
-    for i in range(count):
-        time.sleep(sleep_time)
-        mbar.update_value(pid, i)
-    return idx, count
+class BarUpdater:
+    def __init__(self, pid, mbar):
+        self.pid = pid
+        self.mbar = mbar
+
+    def __call__(self, iterator, descr=None, total=None):
+        if descr is not None:
+            self.update_name(descr)
+        if total is not None:
+            self.update_total(total)
+
+        iterator = iter(iterator)
+        value = 0
+        try:
+            while True:
+                value = next(iterator)
+                yield value
+                self.mbar.update_value(self.pid, value)
+        except StopIteration:
+            self.mbar.update_value(self.pid, value)
+            return value
+
+    def update_name(self, name):
+        self.mbar.update_name(self.pid, name)
+
+    def update_total(self, total):
+        self.mbar.update_total(self.pid, total)
+
+    def update_value(self, value):
+        self.mbar.update_value(self.pid, value)
 
 
-def slow_loop_test(idx, count, sleep_time, pid: int, mbar: Multibar):
-    mbar.update_total(pid, count)
-    mbar.update_name(pid, f"proc: {idx}")
-    for i in range(count):
-        for j in range(int(10000 * sleep_time * 1000)):
+def slow_loop_test(idx, count, sleep_time, pbar: BarUpdater = None):
+    for i in pbar(range(count), descr=f'{idx}', total=count):
+        for j in range(int(3000 * sleep_time * 1000)):
             k = j + i
-        mbar.update_value(pid, i)
     return idx, count
 
 
@@ -269,7 +299,7 @@ def run_test():
     mbar = Multibar()
     for name, args in zip(it, it_args):
         rand_str, rand_count, rand_sleep = args
-        mbar.add_task('', 1, slow_loop_test, *args)
+        mbar.add_task(slow_loop_test, (rand_str, rand_count,), {'sleep_time': rand_sleep})
     mbar.begin_processing()
 
 
