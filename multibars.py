@@ -106,6 +106,17 @@ class Multibar(qt.QObject):
     setNameSignal = qt.pyqtSignal(object, object)
     setTotalSignal = qt.pyqtSignal(object, object)
 
+    class Wrappers:
+        @staticmethod
+        def handle_mutex_and_catch_runtime(func):
+            def wrapper(inst, *args, **kwargs):
+                locker = qt.QMutexLocker(inst.mutex)
+                try:
+                    return func(inst, *args, **kwargs)
+                except RuntimeError:
+                    return None
+            return wrapper
+
     def __init__(self, batch_size=None):
         super(Multibar, self).__init__()
 
@@ -212,27 +223,18 @@ class Multibar(qt.QObject):
         if len(self.running_tasks) == 0:
             self.allProcessesFinished.emit()
 
+    @Wrappers.handle_mutex_and_catch_runtime
     def update_value(self, pid, value):
-        locker = qt.QMutexLocker(self.mutex)
-        try:
-            if self.pbars[pid].allowed_to_set_value(value):
-                self.setValueSignal.emit(pid, value)
-        except RuntimeError:
-            pass
+        if self.pbars[pid].allowed_to_set_value(value):
+            self.setValueSignal.emit(pid, value)
 
+    @Wrappers.handle_mutex_and_catch_runtime
     def update_name(self, pid, name):
-        locker = qt.QMutexLocker(self.mutex)
-        try:
-            self.setNameSignal.emit(pid, name)
-        except RuntimeError:
-            pass
+        self.setNameSignal.emit(pid, name)
 
+    @Wrappers.handle_mutex_and_catch_runtime
     def update_total(self, pid, total):
-        locker = qt.QMutexLocker(self.mutex)
-        try:
-            self.setTotalSignal.emit(pid, total)
-        except RuntimeError:
-            pass
+        self.setTotalSignal.emit(pid, total)
 
     def _set_pbar_value(self, pbar_id, value):
         self.pbars[pbar_id].set_value(value)
