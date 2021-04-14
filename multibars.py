@@ -100,6 +100,32 @@ class LabeledProgressBar(qt.QProgressBar):
         self.progress_label.setText(self.progress_str)
 
 
+class ZoomingScrollArea(qt.QScrollArea):
+    adjustFontSignal = qt.pyqtSignal(object)
+
+    def __init__(self):
+        super().__init__()
+        self.fontsize = 11
+        self.adjust_font(1)
+        self.adjustFontSignal.connect(self.adjust_font)
+
+    def wheelEvent(self, a0: qt.QWheelEvent):
+        mods = a0.modifiers()
+        if mods == qt.Qt.KeyboardModifier.ControlModifier:
+            delta = a0.angleDelta()
+            incr = delta.y() // abs(delta.y())
+            self.adjustFontSignal.emit(incr)
+        else:
+            super().wheelEvent(a0)
+
+    def adjust_font(self, incr):
+        if incr < 0:
+            self.fontsize = max(1, self.fontsize + incr)
+        else:
+            self.fontsize = min(50, self.fontsize + incr)
+        self.setFont(qt.QFont('calibri', self.fontsize))
+
+
 class Multibar(qt.QObject):
     allProcessesFinished = qt.pyqtSignal()
     setValueSignal = qt.pyqtSignal(object, object)
@@ -147,7 +173,7 @@ class Multibar(qt.QObject):
         self.widget.setLayout(self.layout)
 
         # window is a QScrollArea widget
-        self.scroll_area = qt.QScrollArea()
+        self.scroll_area = ZoomingScrollArea()
         self.scroll_area.setWindowTitle(title)
         self.scroll_area.setWidget(self.widget)
         self.scroll_area.setWidgetResizable(True)
@@ -162,9 +188,6 @@ class Multibar(qt.QObject):
 
         self.scroll_area.setFocus()
         self.scroll_area.show()
-
-    def adjust_font(self, size):
-        self.scroll_area.setFont(qt.QFont('calibri', size))
 
     def add_task(self, func=callable, func_args=tuple, func_kwargs=dict(), descr='', total=1):
         """
