@@ -378,8 +378,7 @@ class Multibar(qt.QObject):
         self.scroll_area.ensureWidgetVisible(self.pbars[0].progress_label, 10, 10)
 
     def add_task_worker(self, i, apply_func, func_args, func_kwargs):
-        updater = BarUpdater(i)
-        self.tasks[i] = Worker(apply_func, func_args, func_kwargs, pid=i, pbar=updater, pool=self.pool)
+        self.tasks[i] = Worker(apply_func, func_args, func_kwargs, pid=i, pbar=BarUpdater(), pool=self.pool)
         self.tasks[i].updateName.connect(self.update_name)
         self.tasks[i].updateTotal.connect(self.update_total)
         self.tasks[i].updateValue.connect(self.update_value)
@@ -464,8 +463,7 @@ class Multibar(qt.QObject):
 
 
 class BarUpdater:
-    def __init__(self, pid):
-        self.pid = pid
+    def __init__(self):
         self._interruption_requested = False
 
     def __call__(self, iterator, descr=None, total=None):
