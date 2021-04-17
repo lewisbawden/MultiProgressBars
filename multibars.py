@@ -99,7 +99,7 @@ class LabeledProgressBar(qt.QProgressBar):
 
     def __init__(self, total=100, name=" ", units_symbol="", max_update_freq=0.02, pid=None, parent=None):
         super(LabeledProgressBar, self).__init__(parent)
-        self.total = total - 1
+        self.total = total
         self.units_symbol = units_symbol
         self.pid = pid
         self.task_name = f"{name}"
@@ -430,6 +430,7 @@ class Multibar(qt.QObject):
             self.running_tasks.pop(pid)
 
     def check_all_finished(self, pid, success):
+        self.update_value(pid, self.pbars[pid].total, success)
         self.end_task(pid)
         self.start_next()
         self.scroll_down()
@@ -437,8 +438,8 @@ class Multibar(qt.QObject):
             self.allProcessesFinished.emit()
 
     @handle_mutex_and_catch_runtime
-    def update_value(self, pid, value):
-        if self.pbars[pid].allowed_to_set_value(value):
+    def update_value(self, pid, value, force=False):
+        if self.pbars[pid].allowed_to_set_value(value) or force:
             self.setValueSignal.emit(pid, value)
 
     @handle_mutex_and_catch_runtime
