@@ -59,7 +59,7 @@ class LabeledProgressBar(qt.QProgressBar):
 
     def __init__(self, total=100, name=" ", units_symbol="", pid=None, parent=None):
         super(LabeledProgressBar, self).__init__(parent)
-        self.total = total
+        self.total = total - 1
         self.units_symbol = units_symbol
         self.pid = pid
         self.task_name = f"{name}"
@@ -68,19 +68,27 @@ class LabeledProgressBar(qt.QProgressBar):
         self.min_update_increment = total // 250
         self.max_update_frequency = 0.05
         self.last_updated = self.get_time()
-        self.recent_iteration_durations = []
+        self.recent_iteration_speeds = []
+        self.elapsed_time = 0
+        self.remaining_time = 0
 
         self.total_str = self.get_formatted_number(total)
         self.progress_str = self.get_progress_str(0)
         self.frequency_str = self.get_frequency_str()
+        self.elapsed_time_str = self.get_elapsed_time_str()
+        self.remaining_time_str = self.get_remaining_time_str()
 
         self.prefix_label = qt.QLabel(self.full_name)
         self.progress_label = qt.QLabel(self.progress_str)
-        self.frequency_label = qt.QLabel()
+        self.frequency_label = qt.QLabel(self.frequency_str)
+        self.elapsed_time_label = qt.QLabel(self.elapsed_time_str)
+        self.remaining_time_label = qt.QLabel(self.remaining_time_str)
 
         self.prefix_label.setEnabled(False)
         self.progress_label.setEnabled(False)
         self.frequency_label.setEnabled(False)
+        self.elapsed_time_label.setEnabled(False)
+        self.remaining_time_label.setEnabled(False)
 
         self.setMinimumSize(200, 20)
         self.setRange(0, total)
