@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+from datetime import timedelta
 from copy import copy
 import random
 import PyQt5.Qt as qt
@@ -128,15 +129,29 @@ class LabeledProgressBar(qt.QProgressBar):
 
     def get_progress_str(self, value):
         out = ' / '.join([self.get_formatted_number(value), self.total_str])
-        return out
+        return f'  {out}'
 
     def get_frequency_str(self):
-        its_suffix = ' it/s'
+        its_suffix = 'it/s'
+        self.mean_speed = 1
 
-        if len(self.recent_iteration_durations) == 0:
-            return its_suffix
+        if len(self.recent_iteration_speeds) == 0:
+            return f'  {its_suffix}'
 
-        recent_durations = self.recent_iteration_durations[-10:]
+        self.recent_iteration_speeds = self.recent_iteration_speeds[-10:]
+        self.mean_speed = round(sum(self.recent_iteration_speeds) / len(self.recent_iteration_speeds), 1)
+        return f'  {self.mean_speed} {its_suffix}'
+
+    def get_elapsed_time_str(self):
+        return f'  {timedelta(seconds=round(self.elapsed_time))}'
+
+    def get_remaining_time_str(self):
+        its_remaining = self.total - self.value()
+        if self.mean_speed == 0:
+            self.remaining_time = 0
+        else:
+            self.remaining_time = its_remaining / self.mean_speed
+        return f'  {timedelta(seconds=round(self.remaining_time))}'
 
     @staticmethod
     def get_time():
@@ -148,8 +163,26 @@ class LabeledProgressBar(qt.QProgressBar):
         return freq_cond and value_cond
 
     def set_value(self, value):
+        value_difference = value - self.value()
         self.setValue(value)
-        self.last_updated = self.get_time()
+
+        update_time = self.get_time()
+        time_difference = update_time - self.last_updated
+        self.last_updated = update_time
+        self.elapsed_time += time_difference
+
+        if time_difference > 0:
+            self.recent_iteration_speeds.append(value_difference / time_difference)
+
+        self.frequency_str = self.get_frequency_str()
+        self.frequency_label.setText(self.frequency_str)
+
+        self.elapsed_time_str = self.get_elapsed_time_str()
+        self.elapsed_time_label.setText(self.elapsed_time_str)
+
+        self.remaining_time_str = self.get_remaining_time_str()
+        self.remaining_time_label.setText(self.remaining_time_str)
+
         self.progress_str = self.get_progress_str(value)
         self.progress_label.setText(self.progress_str)
 
@@ -286,6 +319,9 @@ class Multibar(qt.QObject):
         self.layout.addWidget(self.pbars[i].prefix_label, i, 0)
         self.layout.addWidget(self.pbars[i], i, 1)
         self.layout.addWidget(self.pbars[i].progress_label, i, 2, alignment=qt.Qt.AlignRight)
+        self.layout.addWidget(self.pbars[i].frequency_label, i, 3, alignment=qt.Qt.AlignRight)
+        self.layout.addWidget(self.pbars[i].elapsed_time_label, i, 4, alignment=qt.Qt.AlignRight)
+        self.layout.addWidget(self.pbars[i].remaining_time_label, i, 5, alignment=qt.Qt.AlignRight)
 
     def add_task_worker(self, i, apply_func, *func_args, **func_kwargs):
         updater = BarUpdater(i, self)
