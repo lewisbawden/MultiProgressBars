@@ -1,12 +1,10 @@
 import os
-import sys
 import time
 from datetime import timedelta
 from copy import copy
 import random
 import PyQt5.Qt as qt
 from tqdm import tqdm
-import subprocess as sp
 import multiprocessing as mp
 
 
@@ -30,35 +28,71 @@ def handle_mutex_and_catch_runtime(func):
     return wrapper
 
 
+class InterruptTask(InterruptedError):
+    """ Stop executing code within QThread immediately and safely quit """
+
+
+class Messages:
+    name = 'name'
+    total = 'total'
+    value = 'value'
+    interruption_request = 'interruption_request'
+
+
 class Worker(qt.QThread):
     taskFinished = qt.pyqtSignal(object)
     sendResult = qt.pyqtSignal(object, object)
+    updateName = qt.pyqtSignal(int, str)
+    updateTotal = qt.pyqtSignal(int, float)
+    updateValue = qt.pyqtSignal(int, float)
 
     def __init__(self, func, *args, **kwargs):
         super().__init__()
         self.func = func
         self.args = args
         self.kwargs = kwargs
+
         self.pid = kwargs.pop('pid', None)
+        self.pool = kwargs.pop('pool')
+
+        self.updater = kwargs.get('pbar')
+        self.worker_pipe, self.target_func_pipe = mp.Pipe()
+        self.updater._set_pipe(self.target_func_pipe)
+        self.poll_messages_frequency = 0.01
 
     def run(self):
         try:
-            out = self.func(*self.args, **self.kwargs)
+            p = self.pool.apply_async(self.func, args=self.args, kwds=self.kwargs)
+            self.handle_messages(p)
+            out = p.get()
             self.sendResult.emit(self.pid, out)
-        except InterruptThread:
+        except InterruptTask:
             pass
         self.taskFinished.emit(self.pid)
 
+    def handle_messages(self, p):
+        while not p.ready():
+            if self.worker_pipe.poll(self.poll_messages_frequency):
+                message = self.worker_pipe.recv()
+                self.send_signal(message)
+            if self.isInterruptionRequested():
+                self.worker_pipe.send((Messages.interruption_request, True))
 
-class InterruptThread(InterruptedError):
-    """ Stop executing code within QThread immediately and safely quit """
+    def send_signal(self, message):
+        field, value = message
+        if field == Messages.value:
+            self.updateValue.emit(self.pid, value)
+        elif field == Messages.name:
+            self.updateName.emit(self.pid, value)
+        elif field == Messages.total:
+            self.updateTotal.emit(self.pid, value)
 
 
 class LabeledProgressBar(qt.QProgressBar):
     cancelTaskSignal = qt.pyqtSignal(int)
     unit_conv = {3: 'k', 6: 'M', 9: 'G', 12: 'T'}
 
-    def __init__(self, total=100, name=" ", units_symbol="", pid=None, parent=None):
+    def __init__(self, total=100, name=" ", units_symbol="", max_update_freq=0.02, pid=None, parent=None):
         super(LabeledProgressBar, self).__init__(parent)
         self.total = total - 1
         self.units_symbol = units_symbol
@@ -67,7 +101,8 @@ class LabeledProgressBar(qt.QProgressBar):
         self.full_name = self.get_full_name(self.task_name)
 
         self.min_update_increment = total // 250
-        self.max_update_frequency = 0.05
+        self.max_update_frequency = max_update_freq
+
         self.last_updated = self.get_time()
         self.recent_iteration_speeds = []
         self.elapsed_time = 0
@@ -103,6 +138,9 @@ class LabeledProgressBar(qt.QProgressBar):
 
     def set_color_cancelled(self):
         self.setStyleSheet("""QProgressBar::chunk{background-color : #AAAAAA;}""")
+
+    def set_max_update_frequency(self, value):
+        self.max_update_frequency = value
 
     def mousePressEvent(self, a0: qt.QMouseEvent):
         if a0.button() == qt.Qt.RightButton:
@@ -250,6 +288,7 @@ class Multibar(qt.QObject):
         super(Multibar, self).__init__()
         self.title = title
         self.batch_size = os.cpu_count() if batch_size is None else batch_size
+        self.max_bar_update_frequency = 0.02
 
         self.app = qt.QApplication([])
 
@@ -259,6 +298,7 @@ class Multibar(qt.QObject):
         self.results = dict()
 
         self.mutex = qt.QMutex()
+        self.pool = mp.Pool(self.batch_size)
 
         self.setup_window(title)
 
@@ -267,7 +307,10 @@ class Multibar(qt.QObject):
             running_pids = list(self.running_tasks.keys())
             for pid in running_pids:
                 self.end_task(pid)
-            self.allProcessesFinished.emit()
+        if self.pool is not None:
+            self.pool.close()
+            self.pool.terminate()
+        self.allProcessesFinished.emit()
 
     def setup_window(self, title):
         self.layout = qt.QGridLayout()
@@ -314,8 +357,11 @@ class Multibar(qt.QObject):
         self.add_task_worker(i, func, *func_args, **func_kwargs)
 
     def add_task_pbar(self, i, pbar_descr, iters_total):
-        self.pbars[i] = LabeledProgressBar(total=iters_total, name=pbar_descr, pid=i, parent=self.scroll_area)
+        self.pbars[i] = LabeledProgressBar(
+            total=iters_total, name=pbar_descr, pid=i, max_update_freq=self.max_bar_update_frequency, parent=self.scroll_area
+        )
         self.pbars[i].cancelTaskSignal.connect(self.confirm_remove_task)
+
         self.layout.addWidget(self.pbars[i].prefix_label, i, 0)
         self.layout.addWidget(self.pbars[i], i, 1)
         self.layout.addWidget(self.pbars[i].progress_label, i, 2, alignment=qt.Qt.AlignRight)
@@ -324,8 +370,11 @@ class Multibar(qt.QObject):
         self.layout.addWidget(self.pbars[i].remaining_time_label, i, 5, alignment=qt.Qt.AlignRight)
 
     def add_task_worker(self, i, apply_func, *func_args, **func_kwargs):
-        updater = BarUpdater(i, self)
-        self.tasks[i] = Worker(apply_func, *func_args, **func_kwargs, pid=i, pbar=updater)
+        updater = BarUpdater(i)
+        self.tasks[i] = Worker(apply_func, *func_args, **func_kwargs, pid=i, pbar=updater, pool=self.pool)
+        self.tasks[i].updateName.connect(self.update_name)
+        self.tasks[i].updateTotal.connect(self.update_total)
+        self.tasks[i].updateValue.connect(self.update_value)
 
     def confirm_remove_task(self, pid):
         confirm = qt.QMessageBox()
@@ -382,9 +431,7 @@ class Multibar(qt.QObject):
 
     @handle_mutex_and_catch_runtime
     def update_value(self, pid, value):
-        if self.tasks[pid].isInterruptionRequested():
-            raise InterruptThread
-        elif self.pbars[pid].allowed_to_set_value(value):
+        if self.pbars[pid].allowed_to_set_value(value):
             self.setValueSignal.emit(pid, value)
 
     @handle_mutex_and_catch_runtime
@@ -409,9 +456,9 @@ class Multibar(qt.QObject):
 
 
 class BarUpdater:
-    def __init__(self, pid, mbar):
+    def __init__(self, pid):
         self.pid = pid
-        self.mbar = mbar
+        self._interruption_requested = False
 
     def __call__(self, iterator, descr=None, total=None):
         if descr is not None:
@@ -430,14 +477,21 @@ class BarUpdater:
             self.update_value(value)
             return value
 
+    def _set_pipe(self, pipe):
+        self._pipe = pipe
+
     def update_name(self, name):
-        self.mbar.update_name(self.pid, name)
+        self._pipe.send((Messages.name, name))
 
     def update_total(self, total):
-        self.mbar.update_total(self.pid, total)
+        self._pipe.send((Messages.total, total))
 
     def update_value(self, value):
-        self.mbar.update_value(self.pid, value)
+        self._pipe.send((Messages.value, value))
+        if self._pipe.poll():
+            message_type, message = self._pipe.recv()
+            if message_type == Messages.interruption_request and message == True:
+                raise InterruptTask
 
 
 def slow_loop_test(idx, count, sleep_time, pbar: BarUpdater = None):
@@ -447,7 +501,7 @@ def slow_loop_test(idx, count, sleep_time, pbar: BarUpdater = None):
     return idx, count
 
 
-def slow_loop_test2(idx, count, sleep_time, pbar: BarUpdater = None):
+def slow_loop_test2(idx, count, sleep_time):
     for i in range(count):
         for j in range(int(30000 * sleep_time * 1000)):
             k = j + i
@@ -460,7 +514,7 @@ def get_random_string(min_length, max_length):
 
 
 @wrapped_timer
-def run_test():
+def run_test_mbar():
     it = iter([get_random_string(8, 64) for i in range(num_tasks)])
     it_args = [[i, get_rand_count(), get_rand_sleep()] for i in copy(it)]
 
@@ -468,12 +522,11 @@ def run_test():
     for name, args in zip(it, it_args):
         rand_str, rand_count, rand_sleep = args
         mbar.add_task(slow_loop_test, (rand_str, rand_count,), {'sleep_time': rand_sleep}, descr=rand_str, total=rand_count)
-    # mbar.app.exec()
     mbar.begin_processing()
 
 
 @wrapped_timer
-def run_test2():
+def run_test_tqdm_serial():
     it = iter([get_random_string(8, 64) for i in range(num_tasks)])
     it_args = [[i, get_rand_count(), get_rand_sleep()] for i in copy(it)]
 
@@ -483,7 +536,7 @@ def run_test2():
 
 
 @wrapped_timer
-def run_test3():
+def run_test_mprocess():
     it = iter([get_random_string(8, 64) for i in range(num_tasks)])
     it_args = [[i, get_rand_count(), get_rand_sleep()] for i in copy(it)]
 
@@ -501,6 +554,6 @@ if __name__ == "__main__":
     get_rand_count = lambda: random.randint(100, 500)
     get_rand_sleep = lambda: random.randint(1, 5) * 0.001
 
-    run_test()
-    # run_test2()
-    # run_test3()
+    run_test_mbar()
+    # run_test_tqdm_serial()
+    # run_test_mprocess()
