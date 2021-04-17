@@ -5,7 +5,9 @@ from copy import copy
 import random
 import PyQt5.Qt as qt
 from tqdm import tqdm
+import subprocess as sp
 import multiprocessing as mp
+
 
 def wrapped_timer(func):
     def wrapper(*args, **kwargs):
@@ -28,8 +30,8 @@ def handle_mutex_and_catch_runtime(func):
 
 
 class Worker(qt.QThread):
-    finished = qt.pyqtSignal(object)
-    send_result = qt.pyqtSignal(object, object)
+    taskFinished = qt.pyqtSignal(object)
+    sendResult = qt.pyqtSignal(object, object)
 
     def __init__(self, func, *args, **kwargs):
         super().__init__()
@@ -38,12 +40,17 @@ class Worker(qt.QThread):
         self.kwargs = kwargs
         self.pid = kwargs.pop('pid', None)
 
-        self.setPriority(qt.QThread.HighestPriority)
-
     def run(self):
-        out = self.func(*self.args, **self.kwargs)
-        self.send_result.emit(self.pid, out)
-        self.finished.emit(self.pid)
+        try:
+            out = self.func(*self.args, **self.kwargs)
+            self.sendResult.emit(self.pid, out)
+        except InterruptThread:
+            pass
+        self.taskFinished.emit(self.pid)
+
+
+class InterruptThread(InterruptedError):
+    """ Stop executing code within QThread immediately and safely quit """
 
 
 class LabeledProgressBar(qt.QProgressBar):
@@ -309,8 +316,8 @@ class Multibar(qt.QObject):
     def start_next(self):
         try:
             next_task = next(self.task_queue)
-            next_task.finished.connect(self.check_all_finished)
-            next_task.send_result.connect(self._get_result)
+            next_task.taskFinished.connect(self.check_all_finished)
+            next_task.sendResult.connect(self._get_result)
             next_task.start()
             self.running_tasks[next_task.pid] = next_task
         except StopIteration:
@@ -318,6 +325,7 @@ class Multibar(qt.QObject):
 
     def end_task(self, pid):
         if pid in self.running_tasks:
+            self.tasks[pid].requestInterruption()
             self.running_tasks[pid].quit()
             self.running_tasks.pop(pid)
 
@@ -330,7 +338,9 @@ class Multibar(qt.QObject):
 
     @handle_mutex_and_catch_runtime
     def update_value(self, pid, value):
-        if self.pbars[pid].allowed_to_set_value(value):
+        if self.tasks[pid].isInterruptionRequested():
+            raise InterruptThread
+        elif self.pbars[pid].allowed_to_set_value(value):
             self.setValueSignal.emit(pid, value)
 
     @handle_mutex_and_catch_runtime
