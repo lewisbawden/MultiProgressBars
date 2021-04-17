@@ -40,35 +40,40 @@ class Messages:
 
 
 class Worker(qt.QThread):
-    taskFinished = qt.pyqtSignal(object)
+    taskFinished = qt.pyqtSignal(object, bool)
     sendResult = qt.pyqtSignal(object, object)
     updateName = qt.pyqtSignal(int, str)
     updateTotal = qt.pyqtSignal(int, float)
     updateValue = qt.pyqtSignal(int, float)
 
-    def __init__(self, func, *args, **kwargs):
+    def __init__(self, apply_func, func_args=tuple, func_kwargs=None, pid=None, pbar=None, pool=None):
         super().__init__()
-        self.func = func
-        self.args = args
-        self.kwargs = kwargs
+        self.func = apply_func
+        self.args = func_args
+        self.kwargs = func_kwargs if func_kwargs is not None else dict()
 
-        self.pid = kwargs.pop('pid', None)
-        self.pool = kwargs.pop('pool')
+        self.pid = pid
+        self.pool = pool
+        self.updater = pbar
+        self.kwargs['pbar'] = pbar
+        self.success = True
 
-        self.updater = kwargs.get('pbar')
         self.worker_pipe, self.target_func_pipe = mp.Pipe()
         self.updater._set_pipe(self.target_func_pipe)
         self.poll_messages_frequency = 0.01
 
     def run(self):
         try:
-            p = self.pool.apply_async(self.func, args=self.args, kwds=self.kwargs)
-            self.handle_messages(p)
-            out = p.get()
+            if self.pool is not None:
+                p = self.pool.apply_async(self.func, args=self.args, kwds=self.kwargs)
+                self.handle_messages(p)
+                out = p.get()
+            else:
+                out = self.func(*self.args, **self.kwargs)
             self.sendResult.emit(self.pid, out)
         except InterruptTask:
-            pass
-        self.taskFinished.emit(self.pid)
+            self.success = False
+        self.taskFinished.emit(self.pid, self.success)
 
     def handle_messages(self, p):
         while not p.ready():
@@ -337,24 +342,26 @@ class Multibar(qt.QObject):
     def scroll_down(self):
         if len(self.running_tasks) > 0:
             bottom = min(max(self.running_tasks) + 1, len(self.pbars) - 1)
-            self.scroll_area.ensureWidgetVisible(self.pbars[bottom], 10, 10)
+            self.scroll_area.ensureWidgetVisible(self.pbars[bottom].progress_label, 10, 10)
 
-    def add_task(self, func=callable, func_args=tuple, func_kwargs=dict(), descr='', total=1):
+    def add_task(self, func=callable, func_args=tuple, func_kwargs=None, descr='', total=1):
         """
         Add a task to be processed with the progress monitored.
         :param func: Function to call (must accept 'pid: int, mbar: Multibar' as kwargs)
-        :param func_args: *args of the function to be called
-        :param func_kwargs: *kwargs of the function to be called
+        :param func_args: tuple: args of the function to be called
+        :param func_kwargs: dict: kwargs of the function to be called
         :param descr: Progress bar label
         :param total: Total iterations expected within the task
         """
+        if func_kwargs is None:
+            func_kwargs = dict()
         if self.title is None:
             self.title = func.__name__
             self.scroll_area.setWindowTitle(self.title)
 
         i = len(self.pbars.keys())
         self.add_task_pbar(i, descr, total)
-        self.add_task_worker(i, func, *func_args, **func_kwargs)
+        self.add_task_worker(i, func, func_args, func_kwargs)
 
     def add_task_pbar(self, i, pbar_descr, iters_total):
         self.pbars[i] = LabeledProgressBar(
@@ -368,10 +375,11 @@ class Multibar(qt.QObject):
         self.layout.addWidget(self.pbars[i].frequency_label, i, 3, alignment=qt.Qt.AlignRight)
         self.layout.addWidget(self.pbars[i].elapsed_time_label, i, 4, alignment=qt.Qt.AlignRight)
         self.layout.addWidget(self.pbars[i].remaining_time_label, i, 5, alignment=qt.Qt.AlignRight)
+        self.scroll_area.ensureWidgetVisible(self.pbars[0].progress_label, 10, 10)
 
-    def add_task_worker(self, i, apply_func, *func_args, **func_kwargs):
+    def add_task_worker(self, i, apply_func, func_args, func_kwargs):
         updater = BarUpdater(i)
-        self.tasks[i] = Worker(apply_func, *func_args, **func_kwargs, pid=i, pbar=updater, pool=self.pool)
+        self.tasks[i] = Worker(apply_func, func_args, func_kwargs, pid=i, pbar=updater, pool=self.pool)
         self.tasks[i].updateName.connect(self.update_name)
         self.tasks[i].updateTotal.connect(self.update_total)
         self.tasks[i].updateValue.connect(self.update_value)
@@ -422,7 +430,7 @@ class Multibar(qt.QObject):
             self.running_tasks[pid].quit()
             self.running_tasks.pop(pid)
 
-    def check_all_finished(self, pid):
+    def check_all_finished(self, pid, success):
         self.end_task(pid)
         self.start_next()
         self.scroll_down()
