@@ -103,7 +103,6 @@ class ProcessHandler(qt.QThread):
 class LabeledProgressBar(qt.QProgressBar):
     cancelTaskSignal = qt.pyqtSignal(int)
     pauseTaskSignal = qt.pyqtSignal(bool)
-    pauseAllSignal = qt.pyqtSignal()
     unit_conv = {3: 'k', 6: 'M', 9: 'G', 12: 'T'}
 
     def __init__(self, total=100, name=" ", units_symbol="", max_update_freq=0.02, pid=None, parent=None):
@@ -111,7 +110,10 @@ class LabeledProgressBar(qt.QProgressBar):
         self.total = total
         self.units_symbol = units_symbol
         self.pid = pid
+
         self.paused = False
+        self.reset_menu()
+
         self.task_name = f"{name}"
         self.full_name = self.get_full_name(self.task_name)
 
@@ -148,25 +150,26 @@ class LabeledProgressBar(qt.QProgressBar):
 
         self.show()
 
+    def mousePressEvent(self, a0: qt.QMouseEvent):
+        if a0.button() == qt.Qt.RightButton:
+            pos = a0.globalPos()
+            self.menu.exec(pos)
+
+    def reset_menu(self):
+        self.menu = qt.QMenu()
+        parent = self.parent()
+        [self.menu.addAction(act) for act in parent.menu.actions()]
+        cancel_task_act = self.menu.addAction(f'Cancel task {self.pid}')
+        cancel_task_act.triggered.connect(self.send_cancel_task_signal)
+        pause_str = f'Unpause task {self.pid}' if self.paused else f'Pause task {self.pid}'
+        pause_task_act = self.menu.addAction(pause_str)
+        pause_task_act.triggered.connect(self.send_pause_task_signal)
+
     def set_color_cancelled(self):
         self.setStyleSheet("""QProgressBar::chunk{background-color : #AAAAAA;}""")
 
     def set_max_update_frequency(self, value):
         self.max_update_frequency = value
-
-    def mousePressEvent(self, a0: qt.QMouseEvent):
-        if a0.button() == qt.Qt.RightButton:
-            menu = qt.QMenu()
-            cancel_task_act = menu.addAction(f'Cancel task {self.pid}')
-            cancel_task_act.triggered.connect(self.send_cancel_task_signal)
-            pause_str = f'Unpause task {self.pid}' if self.paused else f'Pause task {self.pid}'
-            pause_task_act = menu.addAction(pause_str)
-            pause_task_act.triggered.connect(self.send_pause_task_signal)
-            menu.addSeparator()
-            pause_all_act = menu.addAction('Pause / Unpause all (spacebar)')
-            pause_all_act.triggered.connect(self.send_pause_all_signal)
-            pos = a0.globalPos()
-            menu.exec(pos)
 
     def send_cancel_task_signal(self):
         self.cancelTaskSignal.emit(self.pid)
@@ -174,9 +177,7 @@ class LabeledProgressBar(qt.QProgressBar):
     def send_pause_task_signal(self):
         self.paused = not self.paused
         self.pauseTaskSignal.emit(self.paused)
-
-    def send_pause_all_signal(self):
-        self.pauseAllSignal.emit()
+        self.reset_menu()
 
     @classmethod
     def get_formatted_number(cls, value, symbol):
@@ -326,12 +327,14 @@ class Multibar(qt.QObject):
     setTotalSignal = qt.pyqtSignal(int, float)
     setValueSignal = qt.pyqtSignal(int, float)
 
-    def __init__(self, title=None, batch_size=None):
+    def __init__(self, title=None, batch_size=2, autoscroll=True):
         super(Multibar, self).__init__()
         self.title = title
         self.batch_size = os.cpu_count() if batch_size is None else batch_size
         self.max_bar_update_frequency = 0.02
+
         self.all_paused = False
+        self.autoscroll = autoscroll
 
         self.app = qt.QApplication([])
 
@@ -344,6 +347,7 @@ class Multibar(qt.QObject):
         self.pool = mp.Pool(self.batch_size)
 
         self.setup_window(title)
+        self.reset_menu()
 
     def __del__(self):
         if len(self.running_tasks) > 0:
@@ -378,11 +382,27 @@ class Multibar(qt.QObject):
         self.scroll_area.setFocus()
         self.scroll_area.show()
 
+    def reset_menu(self):
+        self.menu = qt.QMenu()
+        autoscroll_str = 'Turn autoscrolling {}'.format('off' if self.autoscroll else 'on')
+        autoscroll_act = self.menu.addAction(autoscroll_str)
+        autoscroll_act.triggered.connect(self.toggle_autoscroll)
+        pause_all_act = self.menu.addAction('Pause / Unpause all (spacebar)')
+        pause_all_act.triggered.connect(self.pause_all_tasks)
+        self.menu.addSeparator()
+
+        self.widget.menu = self.menu
+
+    def toggle_autoscroll(self):
+        self.autoscroll = not self.autoscroll
+        self.reset_menu()
+
     def scroll_down(self):
-        bottom = 0
-        if len(self.results) > 0:
-            bottom = min(max(self.results) + 1, len(self.pbars) - 1)
-        self.scroll_area.ensureWidgetVisible(self.pbars[bottom].progress_label, 10, 10)
+        if self.autoscroll:
+            bottom = 0
+            if len(self.results) > 0:
+                bottom = min(max(self.results) + 1, len(self.pbars) - 1)
+            self.scroll_area.ensureWidgetVisible(self.pbars[bottom].progress_label, 10, 10)
 
     def add_task(self, func=callable, func_args=tuple, func_kwargs=None, descr='', total=1):
         """
@@ -410,7 +430,7 @@ class Multibar(qt.QObject):
             name=pbar_descr,
             pid=i,
             max_update_freq=self.max_bar_update_frequency,
-            parent=self.scroll_area
+            parent=self.widget
         )
         self.layout.addWidget(self.pbars[i].prefix_label, i, 0)
         self.layout.addWidget(self.pbars[i], i, 1)
@@ -430,7 +450,6 @@ class Multibar(qt.QObject):
 
         self.pbars[i].cancelTaskSignal.connect(self.confirm_remove_task)
         self.pbars[i].pauseTaskSignal.connect(self.tasks[i].set_pause_requested)
-        self.pbars[i].pauseAllSignal.connect(self.pause_all_tasks)
 
     def confirm_remove_task(self, pid):
         confirm = qt.QMessageBox()
@@ -547,7 +566,7 @@ class BarUpdater:
 
     def _wait_for_unpause(self):
         while True:
-            if self._pipe.poll(0.035):
+            if self._pipe.poll(0.1):
                 message_type, message = self._pipe.recv()
                 if message_type == Messages.pause_request and message == False:
                     return
