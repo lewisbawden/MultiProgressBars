@@ -327,7 +327,7 @@ class Multibar(qt.QObject):
     setTotalSignal = qt.pyqtSignal(int, float)
     setValueSignal = qt.pyqtSignal(int, float)
 
-    def __init__(self, title=None, batch_size=2, autoscroll=True):
+    def __init__(self, title=None, batch_size=None, autoscroll=True):
         super(Multibar, self).__init__()
         self.title = title
         self.batch_size = os.cpu_count() if batch_size is None else batch_size
