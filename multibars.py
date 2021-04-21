@@ -103,6 +103,7 @@ class ProcessHandler(qt.QThread):
 class LabeledProgressBar(qt.QProgressBar):
     cancelTaskSignal = qt.pyqtSignal(int)
     pauseTaskSignal = qt.pyqtSignal(bool)
+    allowAutoScroll = qt.pyqtSignal(bool)
     unit_conv = {3: 'k', 6: 'M', 9: 'G', 12: 'T'}
 
     def __init__(self, total=100, name=" ", units_symbol="", max_update_freq=0.02, pid=None, parent=None):
@@ -153,7 +154,9 @@ class LabeledProgressBar(qt.QProgressBar):
     def mousePressEvent(self, a0: qt.QMouseEvent):
         if a0.button() == qt.Qt.RightButton:
             pos = a0.globalPos()
+            self.allowAutoScroll.emit(False)
             self.menu.exec(pos)
+            self.allowAutoScroll.emit(True)
 
     def reset_menu(self):
         self.menu = qt.QMenu()
@@ -393,6 +396,9 @@ class Multibar(qt.QObject):
 
         self.widget.menu = self.menu
 
+    def set_autoscroll_enabled(self, enabled):
+        self.autoscroll = enabled
+
     def toggle_autoscroll(self):
         self.autoscroll = not self.autoscroll
         self.reset_menu()
@@ -450,6 +456,7 @@ class Multibar(qt.QObject):
 
         self.pbars[i].cancelTaskSignal.connect(self.confirm_remove_task)
         self.pbars[i].pauseTaskSignal.connect(self.tasks[i].set_pause_requested)
+        self.pbars[i].allowAutoScroll.connect(self.set_autoscroll_enabled)
 
     def confirm_remove_task(self, pid):
         confirm = qt.QMessageBox()
