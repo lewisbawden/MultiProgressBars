@@ -11,6 +11,12 @@ class Multibar:
     def __del__(self):
         self._mbar.__del__()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        yield self._mbar.__exit__(exc_type, exc_val, exc_tb)
+
     def add_task(self, func: callable, func_args: tuple = (), func_kwargs: dict = None, descr='', total=1):
         """
         Add a task to be processed with the progress monitored.
