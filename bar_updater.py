@@ -1,4 +1,4 @@
-from process_handler import Messages, InterruptTask
+from source.process_handler import Messages, InterruptTask
 
 
 class BarUpdater:
