@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 from datetime import timedelta
 from copy import copy
@@ -363,6 +364,14 @@ class Multibar(qt.QObject):
             self.pool.close()
             self.pool.terminate()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        yield self.results
+        self.__del__()
+        sys.excepthook(exc_type, exc_val, exc_tb)
+
     def setup_window(self, title):
         self.layout = qt.QGridLayout()
         self.widget = qt.QWidget()
@@ -412,7 +421,7 @@ class Multibar(qt.QObject):
                 bottom = min(max(self.results) + 1, len(self.pbars) - 1)
             self.scroll_area.ensureWidgetVisible(self.pbars[bottom].progress_label, 10, 10)
 
-    def add_task(self, func=callable, func_args=tuple, func_kwargs=None, descr='', total=1):
+    def add_task(self, func: callable, func_args: tuple = (), func_kwargs: dict = None, descr='', total=1):
         """
         Add a task to be processed with the progress monitored.
         :param func: Function to call (must accept 'pid: int, mbar: Multibar' as kwargs)
@@ -552,10 +561,19 @@ class Multibar(qt.QObject):
     def get_results(self):
         return {k: self.results[k] for k in sorted(self.results.keys())}
 
+    def get(self):
+        self.begin_processing()
+        return self.get_results()
+
 
 class BarUpdater:
     def __init__(self):
         self._interruption_requested = False
+        self._manually_updating_value = False
+
+    def __del__(self):
+        if hasattr(self, '_pipe') and self._pipe is not None and not self._pipe.closed:
+            self._pipe.close()
 
     def __call__(self, iterator, descr=None, total=None):
         if descr is not None:
@@ -569,9 +587,9 @@ class BarUpdater:
             while True:
                 value = next(iterator)
                 yield value
-                self.update_value(value)
+                self._update_value(value)
         except StopIteration:
-            self.update_value(value)
+            self._update_value(value)
             return value
 
     def _set_pipe(self, pipe):
@@ -584,13 +602,7 @@ class BarUpdater:
                 if message_type == Messages.pause_request and message == False:
                     return
 
-    def update_name(self, name):
-        self._pipe.send((Messages.name, name))
-
-    def update_total(self, total):
-        self._pipe.send((Messages.total, total))
-
-    def update_value(self, value):
+    def _handle_update_messages(self, value):
         self._pipe.send((Messages.value, value))
         if self._pipe.poll():
             message_type, message = self._pipe.recv()
@@ -598,6 +610,20 @@ class BarUpdater:
                 raise InterruptTask
             if message_type == Messages.pause_request and message == True:
                 self._wait_for_unpause()
+
+    def _update_value(self, value):
+        if not self._manually_updating_value:
+            self._handle_update_messages(value)
+
+    def update_value(self, value):
+        self._manually_updating_value = True
+        self._handle_update_messages(value)
+
+    def update_name(self, name):
+        self._pipe.send((Messages.name, name))
+
+    def update_total(self, total):
+        self._pipe.send((Messages.total, total))
 
 
 def slow_loop_test(idx, count, sleep_time, pbar: BarUpdater = None):
@@ -635,12 +661,11 @@ def get_random_string(min_length, max_length):
 
 @wrapped_timer
 def run_test_mbar(it, it_args):
-    mbar = Multibar()
-    for name, args in zip(it, it_args):
-        rand_str, rand_count, rand_sleep = args
-        mbar.add_task(slow_loop_test, (rand_str, rand_count,), {'sleep_time': rand_sleep}, descr=rand_str, total=rand_count)
-    mbar.begin_processing()
-    print(mbar.get_results())
+    with Multibar() as mbar:
+        for name, args in zip(it, it_args):
+            rand_str, rand_count, rand_sleep = args
+            mbar.add_task(slow_loop_test, (rand_str, rand_count,), {'sleep_time': rand_sleep}, descr=rand_str, total=rand_count)
+    print(mbar.get())
 
 
 @wrapped_timer
