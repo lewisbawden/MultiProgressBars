@@ -325,21 +325,23 @@ class ZoomingScrollArea(qt.QScrollArea):
 
 
 class Multibar(qt.QObject):
+    appStarted = qt.pyqtSignal()
     allProcessesFinished = qt.pyqtSignal()
     setNameSignal = qt.pyqtSignal(int, object)
     setTotalSignal = qt.pyqtSignal(int, float)
     setValueSignal = qt.pyqtSignal(int, float)
 
-    def __init__(self, title=None, batch_size=None, autoscroll=True):
+    def __init__(self, title=None, batch_size=None, autoscroll=True, quit_on_finished=True):
         super(Multibar, self).__init__()
+        self.app = qt.QApplication([])
+
         self.title = title
         self.batch_size = os.cpu_count() if batch_size is None else batch_size
         self.max_bar_update_frequency = 0.02
 
         self.all_paused = False
         self.autoscroll = autoscroll
-
-        self.app = qt.QApplication([])
+        self.quit_on_finished = quit_on_finished
 
         self.pbars = dict()
         self.tasks = dict()
@@ -444,7 +446,6 @@ class Multibar(qt.QObject):
         self.layout.addWidget(self.pbars[i].frequency_label, i, 3, alignment=qt.Qt.AlignRight)
         self.layout.addWidget(self.pbars[i].elapsed_time_label, i, 4, alignment=qt.Qt.AlignRight)
         self.layout.addWidget(self.pbars[i].remaining_time_label, i, 5, alignment=qt.Qt.AlignRight)
-        self.scroll_area.ensureWidgetVisible(self.pbars[0].progress_label, 10, 10)
 
     def add_task_worker(self, i, apply_func, func_args, func_kwargs):
         self.tasks[i] = ProcessHandler(apply_func, func_args, func_kwargs, pid=i, pbar=BarUpdater(), pool=self.pool)
@@ -478,13 +479,18 @@ class Multibar(qt.QObject):
         self.setNameSignal.connect(self._set_pbar_name)
         self.setTotalSignal.connect(self._set_pbar_total)
 
-        self.allProcessesFinished.connect(self.app.quit)
+        def start_initial_batch():
+            self.task_queue = iter(self.tasks.values())
+            for i in range(self.batch_size):
+                self.start_next()
 
         self.app.processEvents()
 
-        self.task_queue = iter(self.tasks.values())
-        for i in range(self.batch_size):
-            self.start_next()
+        qt.QTimer.singleShot(0, self.appStarted.emit)
+        self.appStarted.connect(start_initial_batch)
+        self.appStarted.connect(self.scroll_down)
+        if self.quit_on_finished:
+            self.allProcessesFinished.connect(self.app.quit, qt.Qt.QueuedConnection)
 
         self.app.exec()
 
@@ -611,12 +617,14 @@ def slow_loop_test2(idx, count, sleep_time):
 def estimate_loop_time(idx, count, sleep_time):
     times = []
     loop_size = int(30000 * sleep_time * 1000)
+    i0 = time.time()
     for i in range(count):
         t0 = time.time()
         for j in range(loop_size):
             k = j + i
         times.append(time.time() - t0)
     print(f'loop size: {loop_size}, mean duration: {sum(times) / count}')
+    print(f'full task iterations: {count}, duration: {time.time() - i0}')
     return idx, count
 
 
@@ -631,7 +639,6 @@ def run_test_mbar(it, it_args):
     for name, args in zip(it, it_args):
         rand_str, rand_count, rand_sleep = args
         mbar.add_task(slow_loop_test, (rand_str, rand_count,), {'sleep_time': rand_sleep}, descr=rand_str, total=rand_count)
-    # mbar.app.exec()
     mbar.begin_processing()
     print(mbar.get_results())
 
@@ -655,9 +662,9 @@ def run_test_mprocess(it, it_args):
 
 if __name__ == "__main__":
     random.seed(123)
-    num_tasks = 20
+    num_tasks = 50
     get_rand_count = lambda: random.randint(10, 50)
-    get_rand_sleep = lambda: random.randint(1, 5) * 0.01
+    get_rand_sleep = lambda: random.randint(1, 5) * 0.005
 
     it = iter([get_random_string(8, 64) for i in range(num_tasks)])
     it_args = [[i, get_rand_count(), get_rand_sleep()] for i in copy(it)]
@@ -665,8 +672,10 @@ if __name__ == "__main__":
 
     sorted_by_sleep = sorted(it_args, key=lambda d: d[2])
 
-    # print('min: ', end=''), estimate_loop_time(0, 20, sorted_by_sleep[0][2])
-    # print('max: ', end=''), estimate_loop_time(0, 20, sorted_by_sleep[-1][2])
+    # print('min: '), estimate_loop_time(0, 10, sorted_by_sleep[0][2])
+    # print('max: '), estimate_loop_time(0, 10, sorted_by_sleep[-1][2])
+    # print('min: '), estimate_loop_time(0, 50, sorted_by_sleep[0][2])
+    # print('max: '), estimate_loop_time(0, 50, sorted_by_sleep[-1][2])
 
     run_test_mbar(copy(it), copy(it_args))
     # run_test_tqdm_serial(copy(it), copy(it_args))
