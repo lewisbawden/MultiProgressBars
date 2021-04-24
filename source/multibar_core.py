@@ -1,7 +1,6 @@
-import os
-import sys
+from time import sleep
 from PyQt5 import QtCore, QtWidgets
-import multiprocessing as mp
+from multiprocessing import Pool, cpu_count
 
 from bar_updater import BarUpdater
 from source.graphics_widgets import ZoomingScrollArea, LabeledProgressBar
@@ -16,12 +15,13 @@ class MultibarCore(QtCore.QObject):
     setTotalSignal = QtCore.pyqtSignal(int, float)
     setValueSignal = QtCore.pyqtSignal(int, float)
 
-    def __init__(self, title=None, batch_size=None, autoscroll=True, quit_on_finished=True, max_bar_update_frequency=0.02):
+    def __init__(self, title=None, batch_size=None, autoscroll=True,
+                 quit_on_finished=True, max_bar_update_frequency=0.02):
         super(MultibarCore, self).__init__()
         self.app = QtWidgets.QApplication([])
 
         self.title = title
-        self.batch_size = os.cpu_count() if batch_size is None else batch_size
+        self.batch_size = cpu_count() if batch_size is None else batch_size
         self.max_bar_update_frequency = max_bar_update_frequency
 
         self.all_paused = False
@@ -34,7 +34,7 @@ class MultibarCore(QtCore.QObject):
         self.results = dict()
 
         self.mutex = QtCore.QMutex()
-        self.pool = mp.Pool(self.batch_size)
+        self.pool = Pool(self.batch_size)
 
         self.setup_window(title)
         self.reset_menu()
@@ -47,14 +47,7 @@ class MultibarCore(QtCore.QObject):
         if self.pool is not None:
             self.pool.close()
             self.pool.terminate()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        yield self.results
-        self.__del__()
-        sys.excepthook(exc_type, exc_val, exc_tb)
+        sleep(0.5)
 
     def setup_window(self, title):
         self.layout = QtWidgets.QGridLayout()

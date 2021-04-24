@@ -7,15 +7,10 @@ class Multibar:
         self._mbar = MultibarCore(
             title=title, batch_size=batch_size, autoscroll=autoscroll,
             quit_on_finished=quit_on_finished, max_bar_update_frequency=max_bar_update_frequency)
+        self.running = False
 
     def __del__(self):
         self._mbar.__del__()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        yield self._mbar.__exit__(exc_type, exc_val, exc_tb)
 
     def add_task(self, func: callable, func_args: tuple = (), func_kwargs: dict = None, descr='', total=1):
         """
@@ -29,6 +24,7 @@ class Multibar:
         self._mbar.add_task(func, func_args, func_kwargs, descr, total)
 
     def begin_processing(self):
+        self.running = True
         self._mbar.begin_processing()
 
     def update_name(self, name):
@@ -41,5 +37,6 @@ class Multibar:
         self._mbar.update_value(value)
 
     def get(self):
-        self._mbar.begin_processing()
+        if not self.running:
+            self._mbar.begin_processing()
         return self._mbar.get_results()
