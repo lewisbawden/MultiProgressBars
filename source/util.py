@@ -17,7 +17,7 @@ def wrapped_timer(func):
 
 def handle_mutex_and_catch_runtime(func):
     def wrapper(inst, *args, **kwargs):
-        locker = QtCore.QMutexLocker(inst.mutex)
+        QtCore.QMutexLocker(inst.mutex)
         try:
             return func(inst, *args, **kwargs)
         except RuntimeError:

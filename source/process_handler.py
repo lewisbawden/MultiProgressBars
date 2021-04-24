@@ -19,7 +19,7 @@ class ProcessHandler(QtCore.QThread):
         self.pool = pool
         self.updater = pbar
         self.kwargs['pbar'] = pbar
-        self.success = True
+        self.success = False
 
         self.pipe, self.target_func_pipe = Pipe()
         self.updater._set_pipe(self.target_func_pipe)
@@ -37,8 +37,9 @@ class ProcessHandler(QtCore.QThread):
             self.handle_messages(p)
             out = p.get()
             self.sendResult.emit(self.pid, out)
+            self.success = True
         except InterruptTask:
-            self.success = False
+            pass
         self.taskFinished.emit(self.pid, self.success)
 
     def handle_messages(self, p):

@@ -1,4 +1,3 @@
-from time import sleep
 from PyQt5 import QtCore, QtWidgets
 from multiprocessing import Pool, cpu_count
 
@@ -40,14 +39,14 @@ class MultibarCore(QtCore.QObject):
         self.reset_menu()
 
     def __del__(self):
+        if self.pool is not None:
+            self.pool.close()
         if len(self.running_tasks) > 0:
             running_pids = list(self.running_tasks.keys())
             for pid in running_pids:
                 self.end_task(pid)
         if self.pool is not None:
-            self.pool.close()
             self.pool.terminate()
-        sleep(0.5)
 
     def setup_window(self, title):
         self.layout = QtWidgets.QGridLayout()

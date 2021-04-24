@@ -36,16 +36,17 @@ def run_test_mbar(it, outer_lb, outer_ub, inner_lb, inner_ub):
 
 
 if __name__ == "__main__":
+    # Initial parameters to imitate tasks that need processing, and individual monitoring
+
     # tasks to run (bars displayed)
     num_tasks = 50
-
-    # get random counts for the dummy tasks (two loops, inner and outer)
-    # bounds for outer loop range
+    # get random counts for the example tasks (two loops, inner and outer)
+    # bounds for outer loop range - this sets the total iterations of the example task
     n, m = 10, 50
-    # bounds for inner loop range
+    # bounds for inner loop range - this simulates a calculation between iterations of the main loop
     p, q = 1e5, 5e5
 
-    # iterator in this case is a list of random strings but it can be anything iterable
+    # iterator - in this case is a list of random strings but it can be anything iterable
     name_list = [get_rand_string(8, 32) for i in range(num_tasks)]
 
     run_test_mbar(name_list, n, m, p, q)
