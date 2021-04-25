@@ -6,7 +6,7 @@ from bar_updater import BarUpdater
 def slow_loop_test(idx, count, count_inner, pbar: BarUpdater = None):
     for i in pbar(range(count), descr=f'{idx}', total=count):
         for j in range(int(count_inner)):
-            k = j + i
+            _ = j + i
     return idx, count
 
 
@@ -39,14 +39,14 @@ if __name__ == "__main__":
     # Initial parameters to imitate tasks that need processing, and individual monitoring
 
     # tasks to run (bars displayed)
-    num_tasks = 50
+    num_tasks = 25
     # get random counts for the example tasks (two loops, inner and outer)
     # bounds for outer loop range - this sets the total iterations of the example task
     n, m = 10, 50
     # bounds for inner loop range - this simulates a calculation between iterations of the main loop
-    p, q = 1e5, 5e5
+    p, q = 5e5, 10e5
 
     # iterator - in this case is a list of random strings but it can be anything iterable
-    name_list = [get_rand_string(8, 32) for i in range(num_tasks)]
+    name_list = [get_rand_string(8, 32) for _ in range(num_tasks)]
 
     run_test_mbar(name_list, n, m, p, q)

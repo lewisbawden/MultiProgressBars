@@ -5,9 +5,7 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 
 
 class LabeledProgressBar(QtWidgets.QProgressBar):
-    cancelTaskSignal = QtCore.pyqtSignal(int)
-    pauseTaskSignal = QtCore.pyqtSignal(bool)
-    allowAutoScroll = QtCore.pyqtSignal(bool)
+    createMenuSignal = QtCore.pyqtSignal(int, object, bool)
     unit_conv = {3: 'k', 6: 'M', 9: 'G', 12: 'T'}
 
     def __init__(self, total=100, name=" ", units_symbol="", max_update_freq=0.02, pid=None, parent=None):
@@ -15,12 +13,10 @@ class LabeledProgressBar(QtWidgets.QProgressBar):
         self.total = total
         self.units_symbol = units_symbol
         self.pid = pid
-
         self.paused = False
-        self.reset_menu()
 
         self.task_name = f"{name}"
-        self.full_name = self.get_full_name(self.task_name)
+        self.full_name = self.get_full_name(self.task_name)  # with 'Task {pid}: ' prefix
 
         self.min_update_increment = total // 500
         self.max_update_frequency = max_update_freq
@@ -58,33 +54,13 @@ class LabeledProgressBar(QtWidgets.QProgressBar):
     def mousePressEvent(self, a0: QtGui.QMouseEvent):
         if a0.button() == QtCore.Qt.RightButton:
             pos = a0.globalPos()
-            self.allowAutoScroll.emit(False)
-            self.menu.exec(pos)
-            self.allowAutoScroll.emit(True)
-
-    def reset_menu(self):
-        self.menu = QtWidgets.QMenu()
-        parent = self.parent()
-        [self.menu.addAction(act) for act in parent.menu.actions()]
-        cancel_task_act = self.menu.addAction(f'Cancel task {self.pid}')
-        cancel_task_act.triggered.connect(self.send_cancel_task_signal)
-        pause_str = f'Unpause task {self.pid}' if self.paused else f'Pause task {self.pid}'
-        pause_task_act = self.menu.addAction(pause_str)
-        pause_task_act.triggered.connect(self.send_pause_task_signal)
-
-    def set_color_cancelled(self):
-        self.setStyleSheet("""QProgressBar::chunk{background-color : #AAAAAA;}""")
+            self.createMenuSignal.emit(self.pid, pos, self.paused)
 
     def set_max_update_frequency(self, value):
         self.max_update_frequency = value
 
-    def send_cancel_task_signal(self):
-        self.cancelTaskSignal.emit(self.pid)
-
-    def send_pause_task_signal(self):
-        self.paused = not self.paused
-        self.pauseTaskSignal.emit(self.paused)
-        self.reset_menu()
+    def set_color_cancelled(self):
+        self.setStyleSheet("""QProgressBar::chunk{background-color : #AAAAAA;}""")
 
     @classmethod
     def get_formatted_number(cls, value, symbol):
@@ -226,3 +202,53 @@ class ZoomingScrollArea(QtWidgets.QScrollArea):
         else:
             self.fontsize = min(100, self.fontsize + incr)
         self.setFont(QtGui.QFont(self.fontname, self.fontsize))
+
+
+class Menu(QtWidgets.QMenu):
+    autoscrollSignal = QtCore.pyqtSignal(bool)
+    pauseAllSignal = QtCore.pyqtSignal()
+    cancelTaskSignal = QtCore.pyqtSignal(int)
+    pauseTaskSignal = QtCore.pyqtSignal(int)
+
+    def __init__(self, autoscroll, pid, pid_paused):
+        super(Menu, self).__init__()
+        self.autoscroll = autoscroll
+        self.pid = pid
+        self.pid_paused = pid_paused
+
+        self.create_menu()
+
+    def create_menu(self):
+        # global menu options
+        autoscroll_str = 'Turn autoscrolling {}'.format('off' if self.autoscroll else 'on')
+        autoscroll_act = self.addAction(autoscroll_str)
+        autoscroll_act.triggered.connect(self.send_autoscroll_signal)
+        pause_all_act = self.addAction('Pause / Unpause all (spacebar)')
+        pause_all_act.triggered.connect(self.pauseAllSignal.emit)
+        self.addSeparator()
+
+        # individual menu options
+        cancel_task_act = self.addAction(f'Cancel task {self.pid}')
+        cancel_task_act.triggered.connect(self.send_cancel_task_signal)
+        pause_str = f'Unpause task {self.pid}' if self.pid_paused else f'Pause task {self.pid}'
+        pause_task_act = self.addAction(pause_str)
+        pause_task_act.triggered.connect(self.send_pause_task_signal)
+
+    def send_autoscroll_signal(self):
+        self.autoscrollSignal.emit(not self.autoscroll)
+
+    def send_cancel_task_signal(self):
+        self.cancelTaskSignal.emit(self.pid)
+
+    def send_pause_task_signal(self):
+        self.pauseTaskSignal.emit(self.pid)
+
+    @staticmethod
+    def confirm_remove_task(pid, task_name):
+        confirm = QtWidgets.QMessageBox()
+        confirm.addButton('Cancel task', QtWidgets.QMessageBox.AcceptRole)
+        confirm.addButton('Resume task', QtWidgets.QMessageBox.RejectRole)
+        confirm.setWindowTitle('Confirm cancelling task:')
+        confirm.setText(f'Cancel task {pid}?\n {task_name}')
+        confirm.exec()
+        return confirm.result()

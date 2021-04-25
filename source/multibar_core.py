@@ -1,8 +1,9 @@
+from time import time
 from PyQt5 import QtCore, QtWidgets
 from multiprocessing import Pool, cpu_count
 
 from bar_updater import BarUpdater
-from source.graphics_widgets import ZoomingScrollArea, LabeledProgressBar
+from source.graphics_widgets import ZoomingScrollArea, LabeledProgressBar, Menu
 from source.process_handler import ProcessHandler
 from source.util import handle_mutex_and_catch_runtime
 
@@ -36,7 +37,6 @@ class MultibarCore(QtCore.QObject):
         self.pool = Pool(self.batch_size)
 
         self.setup_window(title)
-        self.reset_menu()
 
     def __del__(self):
         if self.pool is not None:
@@ -72,23 +72,8 @@ class MultibarCore(QtCore.QObject):
         self.scroll_area.setFocus()
         self.scroll_area.show()
 
-    def reset_menu(self):
-        self.menu = QtWidgets.QMenu()
-        autoscroll_str = 'Turn autoscrolling {}'.format('off' if self.autoscroll else 'on')
-        autoscroll_act = self.menu.addAction(autoscroll_str)
-        autoscroll_act.triggered.connect(self.toggle_autoscroll)
-        pause_all_act = self.menu.addAction('Pause / Unpause all (spacebar)')
-        pause_all_act.triggered.connect(self.pause_all_tasks)
-        self.menu.addSeparator()
-
-        self.widget.menu = self.menu
-
     def set_autoscroll_enabled(self, enabled):
         self.autoscroll = enabled
-
-    def toggle_autoscroll(self):
-        self.autoscroll = not self.autoscroll
-        self.reset_menu()
 
     def scroll_down(self):
         if self.autoscroll:
@@ -132,24 +117,7 @@ class MultibarCore(QtCore.QObject):
         self.tasks[i].updateTotal.connect(self.update_total)
         self.tasks[i].updateValue.connect(self.update_value)
 
-        self.pbars[i].cancelTaskSignal.connect(self.confirm_remove_task)
-        self.pbars[i].pauseTaskSignal.connect(self.tasks[i].set_pause_requested)
-        self.pbars[i].allowAutoScroll.connect(self.set_autoscroll_enabled)
-
-    def confirm_remove_task(self, pid):
-        confirm = QtWidgets.QMessageBox()
-        confirm.addButton('Cancel task', QtWidgets.QMessageBox.AcceptRole)
-        confirm.addButton('Resume task', QtWidgets.QMessageBox.RejectRole)
-        confirm.setWindowTitle('Confirm cancelling task:')
-        confirm.setText(f'Cancel task {pid}?\n {self.pbars[pid].task_name}')
-
-        def cancel():
-            print(f'Cancelling task {pid}: {self.pbars[pid].full_name}')
-            self.pbars[pid].set_color_cancelled()
-            self.end_task(pid)
-
-        confirm.accepted.connect(cancel)
-        confirm.exec()
+        self.pbars[i].createMenuSignal.connect(self.create_menu)
 
     def begin_processing(self):
         self.setValueSignal.connect(self._set_pbar_value)
@@ -158,7 +126,7 @@ class MultibarCore(QtCore.QObject):
 
         def start_initial_batch():
             self.task_queue = iter(self.tasks.values())
-            for i in range(self.batch_size):
+            for _ in range(self.batch_size):
                 self.start_next()
 
         self.app.processEvents()
@@ -200,6 +168,36 @@ class MultibarCore(QtCore.QObject):
         for i in self.running_tasks:
             self.pbars[i].paused = self.all_paused
             self.tasks[i].set_pause_requested(self.all_paused)
+
+    def cancel_task(self, pid):
+        confirmed = Menu.confirm_remove_task(pid, self.pbars[pid].full_name)
+        if confirmed:
+            self.end_task(pid)
+            self.pbars[pid].set_color_cancelled()
+            print(f'Cancelling task {pid}: {self.pbars[pid].full_name}')
+
+    def pause_task(self, pid):
+        print(f'Pausing task {pid}: {self.pbars[pid].full_name}')
+        self.tasks[pid].set_pause_requested(not self.pbars[pid].paused)
+
+    def create_menu(self, pid, mouse_pos, paused):
+        autoscroll_state = self.autoscroll
+
+        # create the menu
+        t0 = time()
+        menu = Menu(autoscroll_state, pid, paused)
+
+        # connect the menu signals to their slots
+        menu.autoscrollSignal.connect(self.set_autoscroll_enabled)
+        menu.pauseAllSignal.connect(self.pause_all_tasks)
+        menu.cancelTaskSignal.connect(self.cancel_task)
+        menu.pauseTaskSignal.connect(self.pause_task)
+        print('Menu create time:', time() - t0)
+
+        # execute the menu
+        self.set_autoscroll_enabled(False)
+        menu.exec(mouse_pos)
+        self.set_autoscroll_enabled(autoscroll_state)
 
     @handle_mutex_and_catch_runtime
     def update_value(self, pid, value, force=False):

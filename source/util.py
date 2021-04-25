@@ -1,16 +1,16 @@
-import time
-import random
+from time import time
+from random import seed, randint
 from PyQt5 import QtCore
 
-random.seed(123)
+seed(123)
 
 
 def wrapped_timer(func):
     def wrapper(*args, **kwargs):
-        t0 = time.time()
+        t0 = time()
         print(f"Enter: {func.__name__}")
         out = func(*args, **kwargs)
-        print(f"Duration {func.__name__}: {time.time() - t0}")
+        print(f"Duration {func.__name__}: {time() - t0}")
         return out
     return wrapper
 
@@ -21,18 +21,19 @@ def handle_mutex_and_catch_runtime(func):
         try:
             return func(inst, *args, **kwargs)
         except RuntimeError:
+
             return None
     return wrapper
 
 
 def get_rand_string(min_length, max_length):
-    length = random.randint(min_length, max_length)
-    return "".join([chr(random.randint(97, 122)) for i in range(length)])
+    length = randint(min_length, max_length)
+    return "".join([chr(randint(97, 122)) for _ in range(length)])
 
 
 def get_rand_count(n, m):
-    return random.randint(n, m)
+    return randint(n, m)
 
 
 def get_rand_sleep(p, q, dt):
-    return random.randint(p, q) * dt
+    return randint(p, q) * dt
