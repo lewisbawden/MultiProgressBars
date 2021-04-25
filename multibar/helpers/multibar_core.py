@@ -1,4 +1,3 @@
-from time import time
 from PyQt5 import QtCore, QtWidgets
 from multiprocessing import Pool, cpu_count
 
@@ -32,6 +31,7 @@ class MultibarCore(QtCore.QObject):
         self.tasks = dict()
         self.running_tasks = dict()
         self.results = dict()
+        self.failed_tasks = dict()
 
         self.mutex = QtCore.QMutex()
         self.pool = Pool(self.batch_size)
@@ -39,6 +39,7 @@ class MultibarCore(QtCore.QObject):
         self.setup_window(title)
 
     def __del__(self):
+        QtCore.QMutexLocker(self.mutex)
         if self.pool is not None:
             self.pool.close()
         if len(self.running_tasks) > 0:
@@ -113,9 +114,9 @@ class MultibarCore(QtCore.QObject):
         self.tasks[i] = ProcessHandler(apply_func, func_args, func_kwargs, pid=i, pbar=BarUpdater(), pool=self.pool)
 
     def add_connections(self, i):
-        self.tasks[i].updateName.connect(self.update_name)
-        self.tasks[i].updateTotal.connect(self.update_total)
-        self.tasks[i].updateValue.connect(self.update_value)
+        self.tasks[i].updateNameSignal.connect(self.update_name)
+        self.tasks[i].updateTotalSignal.connect(self.update_total)
+        self.tasks[i].updateValueSignal.connect(self.update_value)
 
         self.pbars[i].createMenuSignal.connect(self.create_menu)
 
@@ -142,22 +143,29 @@ class MultibarCore(QtCore.QObject):
     def start_next(self):
         try:
             next_task = next(self.task_queue)
-            next_task.taskFinished.connect(self.check_all_finished)
-            next_task.sendResult.connect(self._get_result)
+            next_task.taskFinishedSignal.connect(self.check_all_finished)
+            next_task.sendResultSignal.connect(self._get_result)
             next_task.start()
             self.running_tasks[next_task.pid] = next_task
         except StopIteration:
             pass
 
-    def end_task(self, pid):
+    def end_task(self, pid, exit_code=ProcessHandler.SUCESSFUL):
+        if exit_code == ProcessHandler.CANCELLED:
+            self.pbars[pid].set_color(LabeledProgressBar.ColorCancelled)
+            self.failed_tasks[pid] = ProcessHandler.CANCELLED
+        if exit_code == ProcessHandler.EXCEPTION_RAISED:
+            self.pbars[pid].set_color(LabeledProgressBar.ColorException)
+            self.failed_tasks[pid] = ProcessHandler.EXCEPTION_RAISED
+
         if pid in self.running_tasks:
             self.tasks[pid].requestInterruption()
             self.running_tasks[pid].quit()
             self.running_tasks.pop(pid)
 
-    def check_all_finished(self, pid, success):
-        self.update_value(pid, self.pbars[pid].total, success)
-        self.end_task(pid)
+    def check_all_finished(self, pid, exit_code):
+        self.update_value(pid, self.pbars[pid].total, exit_code)
+        self.end_task(pid, exit_code)
         self.start_next()
         self.scroll_down()
         if len(self.running_tasks) == 0:
@@ -172,8 +180,7 @@ class MultibarCore(QtCore.QObject):
     def cancel_task(self, pid):
         confirmed = Menu.confirm_remove_task(pid, self.pbars[pid].full_name)
         if confirmed:
-            self.end_task(pid)
-            self.pbars[pid].set_color_cancelled()
+            self.end_task(pid, LabeledProgressBar.ColorCancelled)
             print(f'Cancelling task {pid}: {self.pbars[pid].full_name}')
 
     def pause_task(self, pid):
@@ -197,8 +204,8 @@ class MultibarCore(QtCore.QObject):
         self.set_autoscroll_enabled(autoscroll_state)
 
     @handle_mutex_and_catch_runtime
-    def update_value(self, pid, value, force=False):
-        if self.pbars[pid].allowed_to_set_value(value) or force:
+    def update_value(self, pid, value, exit_code=ProcessHandler.EXCEPTION_RAISED):
+        if self.pbars[pid].allowed_to_set_value(value) or exit_code == ProcessHandler.SUCESSFUL:
             self.setValueSignal.emit(pid, value)
 
     @handle_mutex_and_catch_runtime

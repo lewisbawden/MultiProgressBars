@@ -1,13 +1,19 @@
+import sys
+import traceback
 from multiprocessing import Pipe
 from PyQt5 import QtCore
 
 
 class ProcessHandler(QtCore.QThread):
-    taskFinished = QtCore.pyqtSignal(object, bool)
-    sendResult = QtCore.pyqtSignal(object, object)
-    updateName = QtCore.pyqtSignal(int, str)
-    updateTotal = QtCore.pyqtSignal(int, float)
-    updateValue = QtCore.pyqtSignal(int, float)
+    taskFinishedSignal = QtCore.pyqtSignal(object, int)
+    sendResultSignal = QtCore.pyqtSignal(object, object)
+    updateNameSignal = QtCore.pyqtSignal(int, str)
+    updateTotalSignal = QtCore.pyqtSignal(int, float)
+    updateValueSignal = QtCore.pyqtSignal(int, float)
+
+    SUCESSFUL = 0
+    CANCELLED = 1
+    EXCEPTION_RAISED = 2
 
     def __init__(self, apply_func, func_args=tuple, func_kwargs=None, pid=None, pbar=None, pool=None):
         super().__init__()
@@ -36,11 +42,16 @@ class ProcessHandler(QtCore.QThread):
             p = self.pool.apply_async(self.func, args=self.args, kwds=self.kwargs)
             self.handle_messages(p)
             out = p.get()
-            self.sendResult.emit(self.pid, out)
-            self.success = True
+            self.sendResultSignal.emit(self.pid, out)
+            self.taskFinishedSignal.emit(self.pid, self.SUCESSFUL)
         except InterruptTask:
-            pass
-        self.taskFinished.emit(self.pid, self.success)
+            self.taskFinishedSignal.emit(self.pid, self.CANCELLED)
+        except:
+            self.taskFinishedSignal.emit(self.pid, self.EXCEPTION_RAISED)
+            ex = sys.exc_info()
+            print(f'----- EXCEPTION RAISED BY TASK: {self.pid} -----', file=sys.stderr)
+            [print(arg.replace('\n\n', '\n'), file=sys.stderr) for arg in traceback.format_exception(*ex)]
+            print(f'----- End traceback for task: {self.pid} -----\n', file=sys.stderr)
 
     def handle_messages(self, p):
         while not p.ready():
@@ -56,11 +67,11 @@ class ProcessHandler(QtCore.QThread):
     def send_signal(self, message):
         field, value = message
         if field == Messages.value:
-            self.updateValue.emit(self.pid, value)
+            self.updateValueSignal.emit(self.pid, value)
         elif field == Messages.name:
-            self.updateName.emit(self.pid, value)
+            self.updateNameSignal.emit(self.pid, value)
         elif field == Messages.total:
-            self.updateTotal.emit(self.pid, value)
+            self.updateTotalSignal.emit(self.pid, value)
 
 
 class Messages:

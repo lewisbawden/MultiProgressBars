@@ -8,6 +8,9 @@ class LabeledProgressBar(QtWidgets.QProgressBar):
     createMenuSignal = QtCore.pyqtSignal(int, object, bool)
     unit_conv = {3: 'k', 6: 'M', 9: 'G', 12: 'T'}
 
+    ColorException = '#d40a00'
+    ColorCancelled = '#aaaaaa'
+
     def __init__(self, total=100, name=" ", units_symbol="", max_update_freq=0.02, pid=None, parent=None):
         super(LabeledProgressBar, self).__init__(parent)
         self.total = total
@@ -52,15 +55,16 @@ class LabeledProgressBar(QtWidgets.QProgressBar):
         self.show()
 
     def mousePressEvent(self, a0: QtGui.QMouseEvent):
-        if a0.button() == QtCore.Qt.RightButton:
+        if a0.button() == QtCore.Qt.MouseButton.RightButton:
             pos = a0.globalPos()
             self.createMenuSignal.emit(self.pid, pos, self.paused)
 
     def set_max_update_frequency(self, value):
         self.max_update_frequency = value
 
-    def set_color_cancelled(self):
-        self.setStyleSheet("""QProgressBar::chunk{background-color : #AAAAAA;}""")
+    def set_color(self, hex_str):
+        style_str = """QProgressBar::chunk{background-color : """ + hex_str + """;}"""
+        self.setStyleSheet(style_str)
 
     @classmethod
     def get_formatted_number(cls, value, symbol):

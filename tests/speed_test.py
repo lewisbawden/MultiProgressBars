@@ -4,7 +4,7 @@ from copy import copy
 from multiprocessing import Pool
 from tqdm import tqdm
 
-from multibar import Multibar
+from multibar.multibar import Multibar
 from multibar.helpers.util import wrapped_timer
 from multibar.bar_updater import BarUpdater
 
