@@ -2,6 +2,14 @@ from multibar.helpers.process_handler import Messages, InterruptTask
 
 
 class BarUpdater:
+    """
+    Object that wraps an iterator and handles updating the progress bar.
+    This must be added to the arguments of the target function of tasks that are added
+    through the main Multibar object. This object is run in a separate Python process and communicates
+    via a localhost socket with the ProcessHandler QThread that is controlling it.
+
+    Argument of the form e.g. 'pbar: BarUpdater = None' must be added to the tasks function header manually.
+    """
     def __init__(self):
         self._interruption_requested = False
         self._manually_updating_value = False
@@ -11,6 +19,13 @@ class BarUpdater:
             self._pipe.close()
 
     def __call__(self, iterator, descr=None, total=None):
+        """
+        Object is callable and yields results of an iterator.
+        Handles updating the value itself each iteration.
+        :param iterator: 'iterable' object whose values are yielded sequentially
+        :param descr: str: description of the progress bar
+        :param total: value the progress bar is counting towards
+        """
         if descr is not None:
             self.update_name(descr)
         if total is not None:
@@ -51,11 +66,21 @@ class BarUpdater:
             self._handle_update_messages(value)
 
     def update_value(self, value):
+        """
+        Manually update the progress bar value to the given 'value'
+        :param value: update progress bar to 'value' (not by, i.e. not an increment)
+        """
         self._manually_updating_value = True
         self._handle_update_messages(value)
 
     def update_name(self, name):
+        """
+        Manually set the name / description of the progress bar
+        """
         self._pipe.send((Messages.name, name))
 
     def update_total(self, total):
+        """
+        Manually set the total (maximum value of) the progress bar
+        """
         self._pipe.send((Messages.total, total))

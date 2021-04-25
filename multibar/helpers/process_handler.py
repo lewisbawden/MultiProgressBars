@@ -1,10 +1,15 @@
-import sys
-import traceback
+from sys import exc_info, stderr
+from traceback import format_exception
 from multiprocessing import Pipe
 from PyQt5 import QtCore
 
 
 class ProcessHandler(QtCore.QThread):
+    """
+    Handles executing the task as a process in the multiprocessing.Pool.
+    Communicates about progress and interruptions between ProcessHandler and process through localhost.
+    Communicates progress with the main GUI thread through pyqtSignals.
+    """
     taskFinishedSignal = QtCore.pyqtSignal(object, int)
     sendResultSignal = QtCore.pyqtSignal(object, object)
     updateNameSignal = QtCore.pyqtSignal(int, str)
@@ -48,10 +53,10 @@ class ProcessHandler(QtCore.QThread):
             self.taskFinishedSignal.emit(self.pid, self.CANCELLED)
         except:
             self.taskFinishedSignal.emit(self.pid, self.EXCEPTION_RAISED)
-            ex = sys.exc_info()
-            print(f'----- EXCEPTION RAISED BY TASK: {self.pid} -----', file=sys.stderr)
-            [print(arg.replace('\n\n', '\n'), file=sys.stderr) for arg in traceback.format_exception(*ex)]
-            print(f'----- End traceback for task: {self.pid} -----\n', file=sys.stderr)
+            ex = exc_info()
+            print(f'----- EXCEPTION RAISED BY TASK: {self.pid} -----', file=stderr)
+            [print(arg.replace('\n\n', '\n'), file=stderr) for arg in format_exception(*ex)]
+            print(f'----- End traceback for task: {self.pid} -----\n', file=stderr)
 
     def handle_messages(self, p):
         while not p.ready():

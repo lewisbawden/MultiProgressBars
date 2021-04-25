@@ -14,8 +14,8 @@ class MultibarCore(QtCore.QObject):
     setTotalSignal = QtCore.pyqtSignal(int, float)
     setValueSignal = QtCore.pyqtSignal(int, float)
 
-    def __init__(self, title=None, batch_size=None, autoscroll=True,
-                 quit_on_finished=True, max_bar_update_frequency=0.02):
+    def __init__(self, title=None, batch_size=None, autoscroll=True, quit_on_finished=True,
+                 max_bar_update_frequency=0.02):
         super(MultibarCore, self).__init__()
         self.app = QtWidgets.QApplication([])
 
@@ -143,7 +143,7 @@ class MultibarCore(QtCore.QObject):
     def start_next(self):
         try:
             next_task = next(self.task_queue)
-            next_task.taskFinishedSignal.connect(self.check_all_finished)
+            next_task.taskFinishedSignal.connect(self.dequeue_task)
             next_task.sendResultSignal.connect(self._get_result)
             next_task.start()
             self.running_tasks[next_task.pid] = next_task
@@ -163,7 +163,7 @@ class MultibarCore(QtCore.QObject):
             self.running_tasks[pid].quit()
             self.running_tasks.pop(pid)
 
-    def check_all_finished(self, pid, exit_code):
+    def dequeue_task(self, pid, exit_code):
         self.update_value(pid, self.pbars[pid].total, exit_code)
         self.end_task(pid, exit_code)
         self.start_next()
