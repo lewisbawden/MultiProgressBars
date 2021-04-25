@@ -105,10 +105,10 @@ class MultibarCore(QtCore.QObject):
         )
         self.layout.addWidget(self.pbars[i].prefix_label, i, 0)
         self.layout.addWidget(self.pbars[i], i, 1)
-        self.layout.addWidget(self.pbars[i].progress_label, i, 2, alignment=QtCore.Qt.AlignRight)
-        self.layout.addWidget(self.pbars[i].frequency_label, i, 3, alignment=QtCore.Qt.AlignRight)
-        self.layout.addWidget(self.pbars[i].elapsed_time_label, i, 4, alignment=QtCore.Qt.AlignRight)
-        self.layout.addWidget(self.pbars[i].remaining_time_label, i, 5, alignment=QtCore.Qt.AlignRight)
+        self.layout.addWidget(self.pbars[i].progress_label, i, 2, alignment=QtCore.Qt.AlignmentFlag.AlignRight)
+        self.layout.addWidget(self.pbars[i].frequency_label, i, 3, alignment=QtCore.Qt.AlignmentFlag.AlignRight)
+        self.layout.addWidget(self.pbars[i].elapsed_time_label, i, 4, alignment=QtCore.Qt.AlignmentFlag.AlignRight)
+        self.layout.addWidget(self.pbars[i].remaining_time_label, i, 5, alignment=QtCore.Qt.AlignmentFlag.AlignRight)
 
     def add_task_worker(self, i, apply_func, func_args, func_kwargs):
         self.tasks[i] = ProcessHandler(apply_func, func_args, func_kwargs, pid=i, pbar=BarUpdater(), pool=self.pool)
@@ -136,7 +136,7 @@ class MultibarCore(QtCore.QObject):
         self.appStarted.connect(start_initial_batch)
         self.appStarted.connect(self.scroll_down)
         if self.quit_on_finished:
-            self.allProcessesFinished.connect(self.app.quit, QtCore.Qt.QueuedConnection)
+            self.allProcessesFinished.connect(self.app.quit)
 
         self.app.exec()
 
@@ -192,7 +192,7 @@ class MultibarCore(QtCore.QObject):
         menu = Menu(self.autoscroll, pid, paused)
 
         # connect the menu signals to their slots
-        menu.autoscrollSignal.connect(self.set_autoscroll_enabled, QtCore.Qt.QueuedConnection)
+        menu.autoscrollSignal.connect(self.set_autoscroll_enabled, QtCore.Qt.ConnectionType.QueuedConnection)
         menu.pauseAllSignal.connect(self.pause_all_tasks)
         menu.cancelTaskSignal.connect(self.cancel_task)
         menu.pauseTaskSignal.connect(self.pause_task)
@@ -229,4 +229,5 @@ class MultibarCore(QtCore.QObject):
         self.results[pid] = result
 
     def get_results(self):
-        return {k: self.results[k] for k in sorted(self.results.keys())}
+        return [{k: self.results[k] for k in sorted(self.results.keys())},
+                {k: self.failed_tasks[k] for k in sorted(self.failed_tasks.keys())}]

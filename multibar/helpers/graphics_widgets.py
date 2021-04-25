@@ -186,14 +186,14 @@ class ZoomingScrollArea(QtWidgets.QScrollArea):
         self.adjustFontSignal.connect(self.adjust_font)
 
     def keyPressEvent(self, a0: QtGui.QKeyEvent):
-        if a0.key() == QtCore.Qt.Key_Space:
+        if a0.key() == QtCore.Qt.Key.Key_Space:
             self.pauseAllSignal.emit()
         else:
             super().keyPressEvent(a0)
 
     def wheelEvent(self, a0: QtGui.QWheelEvent):
         mods = a0.modifiers()
-        if mods == QtCore.Qt.ControlModifier:
+        if mods == QtCore.Qt.KeyboardModifier.ControlModifier:
             delta = a0.angleDelta()
             incr = delta.y() // abs(delta.y())
             self.adjustFontSignal.emit(incr)
@@ -257,4 +257,3 @@ class Menu(QtWidgets.QMenu):
         confirm.exec()
 
         return confirm.result() == QtWidgets.QMessageBox.AcceptRole
-
