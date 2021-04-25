@@ -10,7 +10,7 @@ class Multibar:
         self._mbar = MultibarCore(
             title=title, batch_size=batch_size, autoscroll=autoscroll, quit_on_finished=quit_on_finished,
             max_bar_update_frequency=max_bar_update_frequency)
-        self.running = False
+        self._running = False
 
     def __del__(self):
         self._mbar.__del__()
@@ -33,7 +33,7 @@ class Multibar:
         Begin processing the QThread tasks, executing the target function using a multiprocessing.Pool.
         Call is blocking until tasks are executed or cancelled (or the app closed).
         """
-        self.running = True
+        self._running = True
         self._mbar.begin_processing()
 
     def get(self):
@@ -42,6 +42,6 @@ class Multibar:
         Call is blocking until tasks are executed or cancelled (or the app closed).
         :return: list[results: dict, failed_tasks: dict]
         """
-        if not self.running:
+        if not self._running:
             self._mbar.begin_processing()
         return self._mbar.get_results()

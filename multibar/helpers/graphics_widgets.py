@@ -1,5 +1,7 @@
 from time import time
 from datetime import timedelta
+from os import cpu_count
+from functools import partial
 
 from PyQt5 import QtWidgets, QtCore, QtGui
 
@@ -213,6 +215,7 @@ class Menu(QtWidgets.QMenu):
     pauseAllSignal = QtCore.pyqtSignal()
     cancelTaskSignal = QtCore.pyqtSignal(int)
     pauseTaskSignal = QtCore.pyqtSignal(int)
+    setNumProcessesSignal = QtCore.pyqtSignal(int)
 
     def __init__(self, autoscroll, pid, pid_paused):
         super(Menu, self).__init__()
@@ -227,13 +230,24 @@ class Menu(QtWidgets.QMenu):
         autoscroll_str = 'Turn autoscrolling {}'.format('off' if self.autoscroll else 'on')
         autoscroll_act = self.addAction(autoscroll_str)
         autoscroll_act.triggered.connect(self.send_autoscroll_signal)
+
         pause_all_act = self.addAction('Pause / Unpause all (spacebar)')
         pause_all_act.triggered.connect(self.pauseAllSignal.emit)
+
+        # global set num processes menu
+        set_num_processes_menu = self.addMenu('Set number of processes')
+        self.set_num_process_acts = []
+        for i in range(cpu_count()):
+            process_act = QtWidgets.QAction(f'{i + 1}')
+            process_act.triggered.connect(partial(self.send_set_num_processes, i + 1))
+            self.set_num_process_acts.append(process_act)
+            set_num_processes_menu.addAction(process_act)
         self.addSeparator()
 
         # individual menu options
         cancel_task_act = self.addAction(f'Cancel task {self.pid}')
         cancel_task_act.triggered.connect(self.send_cancel_task_signal)
+
         pause_str = f'Unpause task {self.pid}' if self.pid_paused else f'Pause task {self.pid}'
         pause_task_act = self.addAction(pause_str)
         pause_task_act.triggered.connect(self.send_pause_task_signal)
@@ -246,6 +260,9 @@ class Menu(QtWidgets.QMenu):
 
     def send_pause_task_signal(self):
         self.pauseTaskSignal.emit(self.pid)
+
+    def send_set_num_processes(self, num):
+        self.setNumProcessesSignal.emit(num)
 
     @staticmethod
     def confirm_remove_task(pid, task_name):

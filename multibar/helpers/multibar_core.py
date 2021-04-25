@@ -30,6 +30,7 @@ class MultibarCore(QtCore.QObject):
         self.pbars = dict()
         self.tasks = dict()
         self.running_tasks = dict()
+        self.on_hold_tasks = dict()
         self.results = dict()
         self.failed_tasks = dict()
 
@@ -120,6 +121,22 @@ class MultibarCore(QtCore.QObject):
 
         self.pbars[i].createMenuSignal.connect(self.create_menu)
 
+    def set_num_proceses(self, num):
+        prev_batch_size = self.batch_size
+        self.batch_size = num
+        delta = prev_batch_size - self.batch_size
+        # more processes requested
+        if prev_batch_size < num:
+            for _ in range(abs(delta)):
+                self.start_next()
+        # fewer processes requested (will pause tasks up to the difference - there must be as many running)
+        elif prev_batch_size > num and len(self.running_tasks) > delta:
+            running_pids = list(reversed(self.running_tasks.keys()))
+            # get the pid of a running task - put it in the on_hold list, pause it
+            for pid in running_pids[:abs(delta)]:
+                self.on_hold_tasks[pid] = self.running_tasks.pop(pid)
+                self.pause_task(pid)
+
     def begin_processing(self):
         self.setValueSignal.connect(self._set_pbar_value)
         self.setNameSignal.connect(self._set_pbar_name)
@@ -142,13 +159,25 @@ class MultibarCore(QtCore.QObject):
 
     def start_next(self):
         try:
+            if not self.allowed_to_start_new_task():
+                return
             next_task = next(self.task_queue)
             next_task.taskFinishedSignal.connect(self.dequeue_task)
             next_task.sendResultSignal.connect(self._get_result)
             next_task.start()
             self.running_tasks[next_task.pid] = next_task
         except StopIteration:
-            pass
+            pass  # end of task_queue has been reached
+
+    def allowed_to_start_new_task(self):
+        if len(self.running_tasks) >= self.batch_size or not self.all_paused:
+            return False
+        elif len(self.on_hold_tasks) > 0:
+            pid = list(self.on_hold_tasks.keys())[-1]
+            self.running_tasks[pid] = self.on_hold_tasks.pop(pid)
+            self.pause_task(pid)
+            return False
+        return True
 
     def end_task(self, pid, exit_code=ProcessHandler.SUCESSFUL):
         if exit_code == ProcessHandler.CANCELLED:
@@ -196,6 +225,7 @@ class MultibarCore(QtCore.QObject):
         menu.pauseAllSignal.connect(self.pause_all_tasks)
         menu.cancelTaskSignal.connect(self.cancel_task)
         menu.pauseTaskSignal.connect(self.pause_task)
+        menu.setNumProcessesSignal.connect(self.set_num_proceses)
 
         # execute the menu
         autoscroll_state = self.autoscroll  # reset autoscroll to previous state, disable while menu active

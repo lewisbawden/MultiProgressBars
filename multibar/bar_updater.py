@@ -67,7 +67,8 @@ class BarUpdater:
 
     def update_value(self, value):
         """
-        Manually update the progress bar value to the given 'value'
+        Manually update the progress bar value to the given 'value'.
+        This permanently overrides the automatic way for this instance, if it was called by wrapping an iterator.
         :param value: update progress bar to 'value' (not by, i.e. not an increment)
         """
         self._manually_updating_value = True
