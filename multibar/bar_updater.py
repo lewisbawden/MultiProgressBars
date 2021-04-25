@@ -1,4 +1,4 @@
-from source.process_handler import Messages, InterruptTask
+from multibar.helpers.process_handler import Messages, InterruptTask
 
 
 class BarUpdater:

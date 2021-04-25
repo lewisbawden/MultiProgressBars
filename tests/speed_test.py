@@ -5,8 +5,8 @@ from multiprocessing import Pool
 from tqdm import tqdm
 
 from multibar import Multibar
-from source.util import wrapped_timer
-from bar_updater import BarUpdater
+from multibar.helpers.util import wrapped_timer
+from multibar.bar_updater import BarUpdater
 
 
 def slow_loop_test(idx, count, sleep_time, pbar: BarUpdater = None):

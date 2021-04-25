@@ -2,10 +2,10 @@ from time import time
 from PyQt5 import QtCore, QtWidgets
 from multiprocessing import Pool, cpu_count
 
-from bar_updater import BarUpdater
-from source.graphics_widgets import ZoomingScrollArea, LabeledProgressBar, Menu
-from source.process_handler import ProcessHandler
-from source.util import handle_mutex_and_catch_runtime
+from multibar.bar_updater import BarUpdater
+from multibar.helpers.graphics_widgets import ZoomingScrollArea, LabeledProgressBar, Menu
+from multibar.helpers.process_handler import ProcessHandler
+from multibar.helpers.util import handle_mutex_and_catch_runtime
 
 
 class MultibarCore(QtCore.QObject):

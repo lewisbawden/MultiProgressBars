@@ -1,4 +1,4 @@
-from source.multibar_core import MultibarCore
+from multibar.helpers.multibar_core import MultibarCore
 
 
 class Multibar:
