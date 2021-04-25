@@ -177,24 +177,21 @@ class MultibarCore(QtCore.QObject):
             print(f'Cancelling task {pid}: {self.pbars[pid].full_name}')
 
     def pause_task(self, pid):
-        print(f'Pausing task {pid}: {self.pbars[pid].full_name}')
         self.tasks[pid].set_pause_requested(not self.pbars[pid].paused)
+        self.pbars[pid].paused = not self.pbars[pid].paused
 
     def create_menu(self, pid, mouse_pos, paused):
-        autoscroll_state = self.autoscroll
-
         # create the menu
-        t0 = time()
-        menu = Menu(autoscroll_state, pid, paused)
+        menu = Menu(self.autoscroll, pid, paused)
 
         # connect the menu signals to their slots
-        menu.autoscrollSignal.connect(self.set_autoscroll_enabled)
+        menu.autoscrollSignal.connect(self.set_autoscroll_enabled, QtCore.Qt.QueuedConnection)
         menu.pauseAllSignal.connect(self.pause_all_tasks)
         menu.cancelTaskSignal.connect(self.cancel_task)
         menu.pauseTaskSignal.connect(self.pause_task)
-        print('Menu create time:', time() - t0)
 
         # execute the menu
+        autoscroll_state = self.autoscroll  # reset autoscroll to previous state, disable while menu active
         self.set_autoscroll_enabled(False)
         menu.exec(mouse_pos)
         self.set_autoscroll_enabled(autoscroll_state)

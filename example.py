@@ -42,9 +42,9 @@ if __name__ == "__main__":
     num_tasks = 25
     # get random counts for the example tasks (two loops, inner and outer)
     # bounds for outer loop range - this sets the total iterations of the example task
-    n, m = 10, 50
+    n, m = 10, 100
     # bounds for inner loop range - this simulates a calculation between iterations of the main loop
-    p, q = 5e5, 10e5
+    p, q = 1e5, 1e6
 
     # iterator - in this case is a list of random strings but it can be anything iterable
     name_list = [get_rand_string(8, 32) for _ in range(num_tasks)]

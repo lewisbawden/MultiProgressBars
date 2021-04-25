@@ -251,4 +251,6 @@ class Menu(QtWidgets.QMenu):
         confirm.setWindowTitle('Confirm cancelling task:')
         confirm.setText(f'Cancel task {pid}?\n {task_name}')
         confirm.exec()
-        return confirm.result()
+
+        return confirm.result() == QtWidgets.QMessageBox.AcceptRole
+
