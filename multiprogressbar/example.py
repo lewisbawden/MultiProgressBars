@@ -1,6 +1,6 @@
-from multibar.multibar import Multibar
-from multibar.helpers.util import wrapped_timer, get_rand_string, get_rand_count
-from multibar.bar_updater import BarUpdater
+from multiprogressbar.multibar import Multibar
+from multiprogressbar.helpers.util import wrapped_timer, get_rand_string, get_rand_count
+from multiprogressbar.bar_updater import BarUpdater
 
 
 def slow_loop_test(idx, count, count_inner, pbar: BarUpdater = None):
