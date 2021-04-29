@@ -4,7 +4,7 @@ from multiprogressbars.bar_updater import BarUpdater
 
 
 def slow_loop_test(idx, count, count_inner, pbar: BarUpdater = None):
-    for i in pbar(range(count), descr=f'{idx}', total=count):
+    for i in pbar(range(count), desc=f'{idx}', total=count):
         if i > 70:
             raise ValueError('Example of possible exception in task')
         for j in range(int(count_inner)):

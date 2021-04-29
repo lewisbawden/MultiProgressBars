@@ -75,7 +75,7 @@ def target_func(
         pbar: BarUpdater = None):
     
     # wrap an iterator in the BarUpdater object to automatically yield and update the internally designated progress bar
-    for _ in pbar(iterator, descr=description_str, total=len(iterator)):
+    for _ in pbar(iterator, desc=description_str, total=len(iterator)):
         # execute code
     return results
 

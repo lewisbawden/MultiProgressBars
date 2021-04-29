@@ -1,8 +1,18 @@
 from time import time
-from random import seed, randint
+from random import randint
 from PyQt5 import QtCore
+from contextlib import contextmanager
 
-seed(123)
+
+@contextmanager
+def context_timer(name=''):
+    t0 = time()
+    print(f'Start {name}:', end='')
+    yield t0
+    tf = round(time() - t0, 3)
+    print(f' Duration: {tf} s')
+    print()
+    return tf
 
 
 def wrapped_timer(func):
@@ -10,7 +20,7 @@ def wrapped_timer(func):
         t0 = time()
         print(f"Enter: {func.__name__}")
         out = func(*args, **kwargs)
-        print(f"Duration {func.__name__}: {time() - t0}")
+        print(f"Duration {func.__name__}: {time() - t0}\n")
         return out
     return wrapper
 

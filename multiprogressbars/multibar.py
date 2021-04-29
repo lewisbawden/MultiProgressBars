@@ -12,10 +12,7 @@ class Multibar:
             max_bar_update_frequency=max_bar_update_frequency)
         self._running = False
 
-    def __del__(self):
-        self._mbar.__del__()
-
-    def add_task(self, func: callable, func_args: tuple = (), func_kwargs: dict = None, descr='', total=1):
+    def add_task(self, func: callable, func_args: tuple = (), func_kwargs: dict = None, desc='', total=1):
         """
         Add a task to be processed and monitored. Processing is not started until requested.
         Tasks are created as a QThread object, the processing is executed using a multiprocessing.Pool object.
@@ -23,10 +20,10 @@ class Multibar:
         :param func: Function to call (must accept 'pid: int, mbar: Multibar' as kwargs)
         :param func_args: tuple: args of the function to be called
         :param func_kwargs: dict: kwargs of the function to be called
-        :param descr: Progress bar label
+        :param desc: Progress bar label
         :param total: Total iterations expected within the task
         """
-        self._mbar.add_task(func, func_args, func_kwargs, descr, total)
+        self._mbar.add_task(func, func_args, func_kwargs, desc, total)
 
     def begin_processing(self):
         """
@@ -45,3 +42,6 @@ class Multibar:
         if not self._running:
             self._mbar.begin_processing()
         return self._mbar.get_results()
+
+    def close(self):
+        self._mbar.close()

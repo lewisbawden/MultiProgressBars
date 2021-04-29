@@ -14,20 +14,16 @@ class BarUpdater:
         self._interruption_requested = False
         self._manually_updating_value = False
 
-    def __del__(self):
-        if hasattr(self, '_pipe') and self._pipe is not None and not self._pipe.closed:
-            self._pipe.close()
-
-    def __call__(self, iterator, descr=None, total=None):
+    def __call__(self, iterator, desc=None, total=None):
         """
         Object is callable and yields results of an iterator.
         Handles updating the value itself each iteration.
         :param iterator: 'iterable' object whose values are yielded sequentially
-        :param descr: str: description of the progress bar
+        :param desc: str: description of the progress bar
         :param total: value the progress bar is counting towards
         """
-        if descr is not None:
-            self.update_name(descr)
+        if desc is not None:
+            self.update_name(desc)
         if total is not None:
             self.update_total(total)
 

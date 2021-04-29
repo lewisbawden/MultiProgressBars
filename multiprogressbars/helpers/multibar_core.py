@@ -1,3 +1,4 @@
+from copy import copy
 from PyQt5 import QtCore, QtWidgets
 from multiprocessing import Pool, cpu_count
 
@@ -22,6 +23,7 @@ class MultibarCore(QtCore.QObject):
         self.title = title
         self.batch_size = cpu_count() if batch_size is None else batch_size
         self.max_bar_update_frequency = max_bar_update_frequency
+        self.closed = False
 
         self.all_paused = False
         self.autoscroll = autoscroll
@@ -40,6 +42,11 @@ class MultibarCore(QtCore.QObject):
         self.setup_window(title)
 
     def __del__(self):
+        if not self.closed:
+            self.close()
+
+    def close(self):
+        self.scroll_area.hide()
         QtCore.QMutexLocker(self.mutex)
         if self.pool is not None:
             self.pool.close()
@@ -49,6 +56,8 @@ class MultibarCore(QtCore.QObject):
                 self.end_task(pid)
         if self.pool is not None:
             self.pool.terminate()
+        self.app.quit()
+        self.closed = True
 
     def setup_window(self, title):
         self.layout = QtWidgets.QGridLayout()
@@ -84,7 +93,7 @@ class MultibarCore(QtCore.QObject):
                 bottom = min(max(self.results) + 1, len(self.pbars) - 1)
             self.scroll_area.ensureWidgetVisible(self.pbars[bottom].progress_label, 10, 10)
 
-    def add_task(self, func: callable, func_args: tuple = (), func_kwargs: dict = None, descr='', total=1):
+    def add_task(self, func: callable, func_args: tuple = (), func_kwargs: dict = None, desc='', total=1):
         if func_kwargs is None:
             func_kwargs = dict()
         if self.title is None:
@@ -92,14 +101,14 @@ class MultibarCore(QtCore.QObject):
             self.scroll_area.setWindowTitle(self.title)
 
         i = len(self.pbars.keys())
-        self.add_task_pbar(i, descr, total)
+        self.add_task_pbar(i, desc, total)
         self.add_task_worker(i, func, func_args, func_kwargs)
         self.add_connections(i)
 
-    def add_task_pbar(self, i, pbar_descr, iters_total):
+    def add_task_pbar(self, i, pbar_desc, iters_total):
         self.pbars[i] = LabeledProgressBar(
             total=iters_total,
-            name=pbar_descr,
+            name=pbar_desc,
             pid=i,
             max_update_freq=self.max_bar_update_frequency,
             parent=self.widget
@@ -259,5 +268,5 @@ class MultibarCore(QtCore.QObject):
         self.results[pid] = result
 
     def get_results(self):
-        return [{k: self.results[k] for k in sorted(self.results.keys())},
-                {k: self.failed_tasks[k] for k in sorted(self.failed_tasks.keys())}]
+        return copy([{k: self.results[k] for k in sorted(self.results.keys())},
+                     {k: self.failed_tasks[k] for k in sorted(self.failed_tasks.keys())}])
