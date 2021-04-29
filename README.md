@@ -22,7 +22,8 @@ The two interface objects are:
 * multiprogressbars.multibar.Multibar
   * This object handles creating and dispatching tasks
 * multiprogressbars.bar_updater.BarUpdater
-  * This object handles communicating updates through localhost about the task it is running
+  * This object handles communicating updates to the progress bar it runs
+  * It is not necessary for the user to know which bar is run by which process this is done internally
 
 #### Helpers
 The Multibar and BarUpdater objects both have an underlying driver which they inherit from.
