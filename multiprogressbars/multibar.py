@@ -1,4 +1,4 @@
-from multiprogressbar.helpers.multibar_core import MultibarCore
+from multiprogressbars.helpers.multibar_core import MultibarCore
 
 
 class Multibar:

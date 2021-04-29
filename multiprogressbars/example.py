@@ -1,6 +1,6 @@
-from multiprogressbar.multibar import Multibar
-from multiprogressbar.helpers.util import wrapped_timer, get_rand_string, get_rand_count
-from multiprogressbar.bar_updater import BarUpdater
+from multiprogressbars.multibar import Multibar
+from multiprogressbars.helpers.util import wrapped_timer, get_rand_string, get_rand_count
+from multiprogressbars.bar_updater import BarUpdater
 
 
 def slow_loop_test(idx, count, count_inner, pbar: BarUpdater = None):
@@ -26,9 +26,7 @@ def run_test_mbar(it, outer_lb, outer_ub, inner_lb, inner_ub):
         mbar.add_task(
             func=slow_loop_test,
             func_args=(name, rand_count_outer,),
-            func_kwargs={'count_inner': rand_count_inner},
-            descr=name,
-            total=rand_count_outer
+            func_kwargs={'count_inner': rand_count_inner}
         )
 
     # processing begins by calling 'begin_processing()', or 'get()'

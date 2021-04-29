@@ -4,9 +4,9 @@ from copy import copy
 from multiprocessing import Pool
 from tqdm import tqdm
 
-from multiprogressbar.multibar import Multibar
-from multiprogressbar.helpers.util import wrapped_timer
-from multiprogressbar.bar_updater import BarUpdater
+from multiprogressbars.multibar import Multibar
+from multiprogressbars.helpers.util import wrapped_timer
+from multiprogressbars.bar_updater import BarUpdater
 
 
 def slow_loop_test(idx, count, sleep_time, pbar: BarUpdater = None):

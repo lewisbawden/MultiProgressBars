@@ -1,4 +1,4 @@
-from multiprogressbar.helpers.process_handler import Messages, InterruptTask
+from multiprogressbars.helpers.process_handler import Messages, InterruptTask
 
 
 class BarUpdater:
