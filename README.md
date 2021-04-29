@@ -5,15 +5,36 @@ It uses the localhost to communicate progress, which is displayed in real time u
 
 #### Features
 Menu appears when right clicking on any bar with the following options:
+* Resizeable, moveable, scrollable GUI for displaying the progress bars 
 * Pinch and scroll zooming by enlarging text
 * Autoscrolling enable / disable (so running tasks are always visible)
 * Basic speed and remaining time estimation
 * Ability to (un)pause any / all tasks.
     * Pausing all tasks also is shortcut to the spacebar
 * Ability to cancel any given task (signified as 'grey').
-* Traceback on any failed tasks without interrupting processing of other tasks (signified by 'red').
+* Traceback on any failed tasks without interrupting processing of other tasks (signified as 'red').
 * Throttling cpu core usage by dynamically setting the pool size when requested through the menu
     * The options range from 1 to your cpu core total and the current tasks are (un)paused appropriately and dispatched when a process becomes available
+
+### Structure
+#### Interface
+The two interface objects are:
+* multiprogressbars.multibar.Multibar
+  * This object handles creating and dispatching tasks
+* multiprogressbars.bar_updater.BarUpdater
+  * This object handles communicating updates through localhost about the task it is running
+
+#### Helpers
+The Multibar and BarUpdater objects both have an underlying driver which they inherit from.
+The Multibar object handles the main GUI and has information about the
+   * the multiprocessing.Pool
+   * the tasks
+   * the progress bars
+   * the results
+
+The tasks are distributed using QThreads to a multiprogressbars.helpers.process_handler.ProcessHandler object.
+The ProcessHandler uses the multiprocessing.Pool to asynchronously run the task as a pickled process.
+It has a two way local host multiprocessing.Pipe for the task to communicate its results as they come in, and for the ProcessHandler to signal to interrupt processing if requested.
 
 ## Installation
 
