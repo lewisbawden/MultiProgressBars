@@ -1,2 +1,4 @@
 ﻿.idea
 __pycache__
+build
+multiprogressbars/multiprogressbars.egg-info
