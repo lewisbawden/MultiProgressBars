@@ -170,7 +170,7 @@ class MultibarCore(QtCore.QObject):
             pass  # end of task_queue has been reached
 
     def allowed_to_start_new_task(self):
-        if len(self.running_tasks) >= self.batch_size or not self.all_paused:
+        if len(self.running_tasks) >= self.batch_size or self.all_paused:
             return False
         elif len(self.on_hold_tasks) > 0:
             pid = list(self.on_hold_tasks.keys())[-1]
