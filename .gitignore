@@ -1,6 +1,6 @@
 ﻿.idea
 __pycache__
 build
-multiprogressbars/multiprogressbars.egg-info
+src/multiprogressbars/multiprogressbars.egg-info
 dist
 multiprogressbars/*.egg-info

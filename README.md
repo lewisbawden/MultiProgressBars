@@ -2,6 +2,7 @@
 
 multiprogressbars is a Python library for processing tasks via pickled processes using the multiprocessing library.
 It uses the localhost to communicate progress, which is displayed in real time using a GUI built with PyQt5.
+The GUI offers some features custom interrupting and throttling tasks for convenience.
 
 #### Features
 Menu appears when right clicking on any bar with the following options:
@@ -46,16 +47,26 @@ pip install multiprogressbars
 ```
 
 ## Usage
+### Potential use cases:
+For tasks that would benefit from python multiprocessing this is a vast improvement on serial execution. 
+It does not improve on the speed of the multiprocessing library alone.
+
+It is likely to be best used when there are tasks that could be done in parallel that have a long enough iterative execution that individual task progress is worth monitoring.
+Some examples would be loading and processing a log file, or processing and saving results of a calculation.
+
+
 #### Initialising the main Multibar task handling object
+
 ```python
 from multiprogressbars.multibar import Multibar
+
 # create the Multibar object - can add tasks and get results through this
 mbar = Multibar()
 # tasks are created using the following example arguments - they are not run immediately
 mbar.add_task(
     func=target_func,
-    func_args=(target_func_arg1, target_func_arg2, ...),
-    func_kwargs={'target_func_kwarg1_key': target_func_kwarg1_value}
+    func_args=(target_func_arg1, target_func_arg2, ...),  # optional
+    func_kwargs={'target_func_kwarg1_key': target_func_kwarg1_value}  # optional
 )
 
 # processing begins by calling 'begin_processing()', or 'get()'
@@ -65,11 +76,13 @@ results_dict, failed_tasks_dict = mbar.get()
 ```
 
 #### Adding the BarUpdater object to the target function for callbacks: wrapping
+
 ```python
 from multiprogressbars.bar_updater import BarUpdater
+
 def target_func(
         target_func_arg1,
-        target_func_arg2, 
+        target_func_arg2,
         target_func_kwarg1_key=target_func_kwarg1_value,
         pbar: BarUpdater = None):
     
@@ -80,11 +93,13 @@ def target_func(
 ```
 
 #### Adding the BarUpdater object to the target function for callbacks: manually calling
+
 ```python
 from multiprogressbars.bar_updater import BarUpdater
+
 def target_func(
         target_func_arg1,
-        target_func_arg2, 
+        target_func_arg2,
         target_func_kwarg1_key=target_func_kwarg1_value,
         pbar: BarUpdater = None):
     

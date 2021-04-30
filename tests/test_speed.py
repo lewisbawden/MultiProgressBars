@@ -5,7 +5,7 @@ from multiprocessing import Pool
 from tqdm import tqdm
 
 from multiprogressbars.multibar import Multibar
-from multiprogressbars.helpers.util import wrapped_timer, get_rand_string, get_rand_count
+from multiprogressbars.helpers.util import get_rand_string, get_rand_count
 from multiprogressbars.bar_updater import BarUpdater
 
 
