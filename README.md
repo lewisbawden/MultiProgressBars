@@ -46,10 +46,8 @@ pip install multiprogressbars
 ```
 
 ## Usage
-
+#### Initialising the main Multibar task handling object
 ```python
-#
-# initialising tasks:
 from multiprogressbars.multibar import Multibar
 # create the Multibar object - can add tasks and get results through this
 mbar = Multibar()
@@ -64,9 +62,10 @@ mbar.add_task(
 # both are blocking until the tasks are finished or the app is quit.
 # this quits all processes and returns the results that have already finished
 results_dict, failed_tasks_dict = mbar.get()
+```
 
-#
-# updating the progress bar for a task:
+#### Adding the BarUpdater object to the target function for callbacks: wrapping
+```python
 from multiprogressbars.bar_updater import BarUpdater
 def target_func(
         target_func_arg1,
@@ -78,9 +77,10 @@ def target_func(
     for _ in pbar(iterator, desc=description_str, total=len(iterator)):
         # execute code
     return results
+```
 
-#
-# this can also be done as:
+#### Adding the BarUpdater object to the target function for callbacks: manually calling
+```python
 from multiprogressbars.bar_updater import BarUpdater
 def target_func(
         target_func_arg1,
