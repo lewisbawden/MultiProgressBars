@@ -35,16 +35,20 @@ The Multibar object handles the main GUI and has information about the
    * the results
 
 The tasks are distributed using QThreads to a multiprogressbars.helpers.process_handler.ProcessHandler object.
-The ProcessHandler uses the multiprocessing.Pool to asynchronously run the task as a pickled process.
-It has a two way local host multiprocessing.Pipe for the task to communicate its results as they come in, and for the ProcessHandler to signal to interrupt processing if requested.
+Each ProcessHandler uses a multiprocessing.Pool to asynchronously run its given task as pickled process.
+It has a two-way local host multiprocessing.Pipe for the task to communicate its results as they come in, and for the ProcessHandler to signal to interrupt processing if requested.
 
 ## Installation
 
 Use the package manager [pip](https://pip.pypa.io/en/stable/) to install multiprogressbars.
-
 ```bash
 pip install multiprogressbars
-```
+``` 
+
+For now, PyQt5 must be installed separately with the following command:
+```bash
+pip install pyqt5
+``` 
 
 ## Usage
 ### Potential use cases:
@@ -53,6 +57,19 @@ It does not improve on the speed of the multiprocessing library alone.
 
 It is likely to be best used when there are tasks that could be done in parallel that have a long enough iterative execution that individual task progress is worth monitoring.
 Some examples would be loading and processing a log file, or processing and saving results of a calculation.
+
+#### Try the examples
+First example running randomly generated tasks that take different amounts of time to execute
+```python
+from multiprogressbars.example import run_example
+run_example()
+```
+
+Second example where some tasks will raise an exception
+```python
+from multiprogressbars.example import run_example_exceptions
+run_example_exceptions()
+```
 
 
 #### Initialising the main Multibar task handling object
