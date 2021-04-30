@@ -3,7 +3,7 @@ from multiprogressbars.helpers.util import wrapped_timer, get_rand_string, get_r
 from multiprogressbars.bar_updater import BarUpdater
 
 
-def slow_loop_test(idx, count, count_inner, pbar: BarUpdater = None):
+def exception_test(idx, count, count_inner, pbar: BarUpdater = None):
     for i in pbar(range(count), desc=f'{idx}', total=count):
         if i > 70:
             raise ValueError('Example of possible exception in task')
@@ -12,8 +12,15 @@ def slow_loop_test(idx, count, count_inner, pbar: BarUpdater = None):
     return idx, count
 
 
+def slow_loop_test(idx, count, count_inner, pbar: BarUpdater = None):
+    for i in pbar(range(count), desc=f'{idx}', total=count):
+        for j in range(int(count_inner)):
+            _ = j + i
+    return idx, count
+
+
 @wrapped_timer
-def run_test_mbar(it, outer_lb, outer_ub, inner_lb, inner_ub):
+def run_test_mbar(it, outer_lb, outer_ub, inner_lb, inner_ub, func=slow_loop_test):
     # create the Multibar object - can add tasks and get results through this
     mbar = Multibar()
 
@@ -24,7 +31,7 @@ def run_test_mbar(it, outer_lb, outer_ub, inner_lb, inner_ub):
 
         # tasks are created using the following example arguments - they are not run immediately
         mbar.add_task(
-            func=slow_loop_test,
+            func=func,
             func_args=(name, rand_count_outer,),
             func_kwargs={'count_inner': rand_count_inner}
         )
@@ -35,11 +42,34 @@ def run_test_mbar(it, outer_lb, outer_ub, inner_lb, inner_ub):
     print(mbar.get())
 
 
+def run_example(
+        num_tasks=25,
+        iters_lb=10,
+        iters_ub=100,
+        inner_loop_lb=1e5,
+        inner_loop_ub=1e6
+):
+    name_list = [get_rand_string(8, 32) for _ in range(num_tasks)]
+    run_test_mbar(name_list, iters_lb, iters_ub, inner_loop_lb, inner_loop_ub)
+
+
+def run_example_exceptions(
+        num_tasks=25,
+        iters_lb=10,
+        iters_ub=100,
+        inner_loop_lb=1e5,
+        inner_loop_ub=1e6
+):
+    name_list = [get_rand_string(8, 32) for _ in range(num_tasks)]
+    run_test_mbar(name_list, iters_lb, iters_ub, inner_loop_lb, inner_loop_ub, exception_test)
+
+
 if __name__ == "__main__":
     # Initial parameters to imitate tasks that need processing, and individual monitoring
 
     # tasks to run (bars displayed)
     num_tasks = 25
+
     # get random counts for the example tasks (two loops, inner and outer)
     # bounds for outer loop range - this sets the total iterations of the example task
     n, m = 10, 100

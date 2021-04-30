@@ -46,7 +46,8 @@ class ProcessHandler(QtCore.QThread):
     def close(self):
         self.target_func_pipe.close()
         self.pipe.close()
-        self.wait(30)
+        self.wait(100)
+        self.quit()
         self.closed = True
 
     def set_pause_requested(self, new_paused_state):
