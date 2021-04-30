@@ -37,11 +37,17 @@ class ProcessHandler(QtCore.QThread):
         self.poll_messages_frequency = 0.01
         self.pause_requested = False
         self.paused = False
+        self.closed = False
 
     def __del__(self):
+        if not self.closed:
+            self.close()
+
+    def close(self):
         self.target_func_pipe.close()
         self.pipe.close()
-        self.quit()
+        self.wait(30)
+        self.closed = True
 
     def set_pause_requested(self, new_paused_state):
         self.pause_requested = True

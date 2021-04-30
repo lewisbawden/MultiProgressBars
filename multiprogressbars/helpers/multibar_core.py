@@ -48,15 +48,20 @@ class MultibarCore(QtCore.QObject):
     def close(self):
         self.scroll_area.hide()
         QtCore.QMutexLocker(self.mutex)
-        if self.pool is not None:
-            self.pool.close()
+
         if len(self.running_tasks) > 0:
             running_pids = list(self.running_tasks.keys())
             for pid in running_pids:
                 self.end_task(pid)
+
+        worker_ids = list(self.tasks.keys())
+        for wid in worker_ids:
+            self.tasks[wid].close()
+            self.tasks[wid] = None
+
         if self.pool is not None:
+            self.pool.close()
             self.pool.terminate()
-        self.app.quit()
         self.closed = True
 
     def setup_window(self, title):
