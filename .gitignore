@@ -4,3 +4,4 @@ build
 src/multiprogressbars/multiprogressbars.egg-info
 dist
 multiprogressbars/*.egg-info
+src/*.egg-info
