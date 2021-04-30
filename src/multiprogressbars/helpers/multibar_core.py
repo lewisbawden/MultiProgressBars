@@ -223,7 +223,7 @@ class MultibarCore(QtCore.QObject):
     def cancel_task(self, pid):
         confirmed = Menu.confirm_remove_task(pid, self.pbars[pid].full_name)
         if confirmed:
-            self.end_task(pid, LabeledProgressBar.ColorCancelled)
+            self.end_task(pid, ProcessHandler.CANCELLED)
             print(f'Cancelling task {pid}: {self.pbars[pid].full_name}')
 
     def pause_task(self, pid):
