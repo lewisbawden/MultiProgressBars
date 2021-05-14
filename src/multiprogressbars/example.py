@@ -79,4 +79,4 @@ if __name__ == "__main__":
     # iterator - in this case is a list of random strings but it can be anything iterable
     name_list = [get_rand_string(8, 32) for _ in range(num_tasks)]
 
-    run_test_mbar(name_list, n, m, p, q)
+    run_test_mbar(name_list, n, m, p, q, exception_test)

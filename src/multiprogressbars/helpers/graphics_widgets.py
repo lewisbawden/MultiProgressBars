@@ -10,8 +10,9 @@ class LabeledProgressBar(QtWidgets.QProgressBar):
     createMenuSignal = QtCore.pyqtSignal(int, object, bool)
     unit_conv = {3: 'k', 6: 'M', 9: 'G', 12: 'T'}
 
-    ColorException = '#d40a00'
-    ColorCancelled = '#aaaaaa'
+    StateException = 'Failed'
+    StateCancelled = 'Cancelled'
+    colors = {StateException: QtGui.QColor(230, 15, 30), StateCancelled: QtGui.QColor(30, 30, 30, 50)}
 
     def __init__(self, total=100, name=" ", units_symbol="", max_update_freq=0.02, pid=None, parent=None):
         super(LabeledProgressBar, self).__init__(parent)
@@ -43,11 +44,11 @@ class LabeledProgressBar(QtWidgets.QProgressBar):
         self.elapsed_time_label = QtWidgets.QLabel(self.elapsed_time_str)
         self.remaining_time_label = QtWidgets.QLabel(self.remaining_time_str)
 
-        self.prefix_label.setEnabled(False)
-        self.progress_label.setEnabled(False)
-        self.frequency_label.setEnabled(False)
-        self.elapsed_time_label.setEnabled(False)
-        self.remaining_time_label.setEnabled(False)
+        self.label_widgets = [self.prefix_label, self.progress_label, self.frequency_label,
+                              self.elapsed_time_label, self.remaining_time_label]
+        self.setEnabled(True)
+        for w in self.label_widgets:
+            w.setEnabled(True)
 
         self.setMinimumSize(200, 20)
         self.setRange(0, total)
@@ -61,12 +62,16 @@ class LabeledProgressBar(QtWidgets.QProgressBar):
             pos = a0.globalPos()
             self.createMenuSignal.emit(self.pid, pos, self.paused)
 
+    def set_state(self, state):
+        self.setEnabled(False)
+        for w in self.label_widgets:
+            palette = w.palette()
+            palette.setColor(QtGui.QPalette.ColorRole.WindowText, self.colors[state])
+            w.setPalette(palette)
+            w.setEnabled(False)
+
     def set_max_update_frequency(self, value):
         self.max_update_frequency = value
-
-    def set_color(self, hex_str):
-        style_str = """QProgressBar::chunk{background-color : """ + hex_str + """;}"""
-        self.setStyleSheet(style_str)
 
     @classmethod
     def get_formatted_number(cls, value, symbol):

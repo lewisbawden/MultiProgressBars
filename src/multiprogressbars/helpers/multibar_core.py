@@ -195,10 +195,10 @@ class MultibarCore(QtCore.QObject):
 
     def end_task(self, pid, exit_code=ProcessHandler.SUCESSFUL):
         if exit_code == ProcessHandler.CANCELLED:
-            self.pbars[pid].set_color(LabeledProgressBar.ColorCancelled)
+            self.pbars[pid].set_state(LabeledProgressBar.StateCancelled)
             self.failed_tasks[pid] = ProcessHandler.CANCELLED
-        if exit_code == ProcessHandler.EXCEPTION_RAISED:
-            self.pbars[pid].set_color(LabeledProgressBar.ColorException)
+        elif exit_code == ProcessHandler.EXCEPTION_RAISED:
+            self.pbars[pid].set_state(LabeledProgressBar.StateException)
             self.failed_tasks[pid] = ProcessHandler.EXCEPTION_RAISED
 
         if pid in self.running_tasks:
