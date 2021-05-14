@@ -42,8 +42,8 @@ def get_rand_string(min_length, max_length):
 
 
 def get_rand_count(n, m):
-    return randint(n, m)
+    return randint(int(n), int(m))
 
 
 def get_rand_sleep(p, q, dt):
-    return randint(p, q) * dt
+    return randint(int(p), int(q)) * dt

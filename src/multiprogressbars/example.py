@@ -4,8 +4,9 @@ from multiprogressbars.bar_updater import BarUpdater
 
 
 def exception_test(idx, count, count_inner, pbar: BarUpdater = None):
+    threshold = get_rand_count(0.5 * count, 1.5 * count)
     for i in pbar(range(count), desc=f'{idx}', total=count):
-        if i > 70:
+        if i > threshold:
             raise ValueError('Example of possible exception in task')
         for j in range(int(count_inner)):
             _ = j + i
@@ -49,6 +50,20 @@ def run_example(
         inner_loop_lb=1e5,
         inner_loop_ub=1e6
 ):
+    """
+    Start and monitor a number of tasks.
+    Random numbers are generated between lower and upper bounds.
+    The outer loop sets the total iterations of the task.
+    The inner loop simulates effective calculation time for each iteration of the outer loop.
+    (Larger meaning a slower evolving progress bar)
+
+    :param num_tasks: tasks to run (bars displayed)
+    :param iters_lb: lower bound for outer loop range
+    :param iters_ub: upper bound for outer loop range
+    :param inner_loop_lb: lower bound for inner loop range
+    :param inner_loop_ub: upper bound for inner loop range
+    :return:
+    """
     name_list = [get_rand_string(8, 32) for _ in range(num_tasks)]
     run_test_mbar(name_list, iters_lb, iters_ub, inner_loop_lb, inner_loop_ub)
 
@@ -60,23 +75,47 @@ def run_example_exceptions(
         inner_loop_lb=1e5,
         inner_loop_ub=1e6
 ):
+    """
+    Start and monitor a number of tasks.
+    Random numbers are generated between lower and upper bounds.
+    The outer loop sets the total iterations of the task.
+    The inner loop simulates effective calculation time for each iteration of the outer loop.
+    (Larger meaning a slower evolving progress bar)
+
+    :param num_tasks: tasks to run (bars displayed)
+    :param iters_lb: lower bound for outer loop range
+    :param iters_ub: upper bound for outer loop range
+    :param inner_loop_lb: lower bound for inner loop range
+    :param inner_loop_ub: upper bound for inner loop range
+    :return:
+    """
     name_list = [get_rand_string(8, 32) for _ in range(num_tasks)]
     run_test_mbar(name_list, iters_lb, iters_ub, inner_loop_lb, inner_loop_ub, exception_test)
 
 
 if __name__ == "__main__":
-    # Initial parameters to imitate tasks that need processing, and individual monitoring
+    # Parse cmd args, if any
+    from argparse import ArgumentParser
+    parser = ArgumentParser(description="Arguments for running example")
+    parser.add_argument("--with_exceptions", action='store_true', help="Run example generating example exceptions", required=False)
 
+    args = parser.parse_args()
+    if args.with_exceptions:
+        example_func = exception_test
+    else:
+        example_func = slow_loop_test
+
+    # Initial parameters to imitate tasks that need processing, and individual monitoring
     # tasks to run (bars displayed)
     num_tasks = 25
 
     # get random counts for the example tasks (two loops, inner and outer)
     # bounds for outer loop range - this sets the total iterations of the example task
-    n, m = 10, 100
+    n, m = 20, 100
     # bounds for inner loop range - this simulates a calculation between iterations of the main loop
     p, q = 1e5, 1e6
 
     # iterator - in this case is a list of random strings but it can be anything iterable
     name_list = [get_rand_string(8, 32) for _ in range(num_tasks)]
 
-    run_test_mbar(name_list, n, m, p, q, exception_test)
+    run_test_mbar(name_list, n, m, p, q, example_func)

@@ -59,6 +59,16 @@ It is likely to be best used when there are tasks that could be done in parallel
 Some examples would be loading and processing a log file, or processing and saving results of a calculation.
 
 #### Try the examples
+For a quick test to see everything is working as it should, try:
+```bash
+python multiprogressbars/example.py
+``` 
+or 
+```bash
+python multiprogressbars/example.py --with_exceptions
+``` 
+
+For testing with control over the parameters for the number of tasks, task names, iteration speeds and totals, import the examples into a python script.
 First example running randomly generated tasks that take different amounts of time to execute
 ```python
 from multiprogressbars.example import run_example
