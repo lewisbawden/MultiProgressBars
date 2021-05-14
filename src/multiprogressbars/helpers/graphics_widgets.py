@@ -50,7 +50,7 @@ class LabeledProgressBar(QtWidgets.QProgressBar):
         for w in self.label_widgets:
             w.setEnabled(True)
 
-        self.setMinimumSize(200, 20)
+        self.setBaseSize(200, 20)
         self.setRange(0, total)
         self.setMouseTracking(False)
         self.setTextVisible(False)
@@ -202,8 +202,9 @@ class ZoomingScrollArea(QtWidgets.QScrollArea):
         mods = a0.modifiers()
         if mods == QtCore.Qt.KeyboardModifier.ControlModifier:
             delta = a0.angleDelta()
-            incr = delta.y() // abs(delta.y())
-            self.adjustFontSignal.emit(incr)
+            if delta.y() != 0:
+                incr = delta.y() // abs(delta.y())
+                self.adjustFontSignal.emit(incr)
         else:
             super().wheelEvent(a0)
 
